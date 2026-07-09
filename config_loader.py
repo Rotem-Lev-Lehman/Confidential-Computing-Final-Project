@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-
+CONFIG_PATH = Path(__file__).parent / "config.json"
 
 @dataclass
 class NodeConfig:
@@ -17,7 +17,7 @@ class Config:
     nodes: dict[int, NodeConfig]
 
 
-def load_config(path: str = "config.json") -> Config:
+def load_config(path: str = CONFIG_PATH) -> Config:
     """
     Load and validate system configuration.
 
