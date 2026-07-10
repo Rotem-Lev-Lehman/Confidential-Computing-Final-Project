@@ -1,15 +1,16 @@
 """
 vectorize.py
 ============
-משימה 2: הפיכת ה-DB המקומי של בית חולים לוקטור היסטוגרמה באורך קבוע M.
+Task 2: Turn a hospital's local DB into a fixed-length histogram vector of size M.
 
-כל בית חולים ממפה את הרשומות המקומיות שלו לוקטור באורך M = len(regions).
-V[j] = מספר החולים החיוביים ב-regions[j] אצל בית החולים הזה.
+Each hospital maps its local records into a vector of length M = len(regions).
+V[j] = number of positive cases in regions[j] at this hospital.
 
-** למה זה קריטי: ** ה-mapping של index -> region נגזר מרשימת regions
-בקונפיג, שזהה בכל 4 הצמתים. זה מה שהופך את ה-Secure Sum למשמעותי --
-כל צומת מסכים ש-index j מייצג את אותו region בדיוק. אם צומת אחד יבנה
-mapping שונה, נסכם תפוחים עם תפוזים והתוצאה תהיה שגויה בשקט.
+** Why this is critical: ** the index -> region mapping is derived from the
+`regions` list in the config, which is identical across all 4 nodes. This is
+what makes the Secure Sum meaningful -- every node agrees that index j refers
+to the exact same region. If one node built a different mapping, we'd sum
+apples with oranges and the result would be silently wrong.
 """
 
 from typing import Iterable
@@ -17,69 +18,73 @@ from typing import Iterable
 
 class UnknownRegionError(ValueError):
     """
-    נזרקת כשרשומה מפנה ל-region שלא קיים בקונפיג.
+    Raised when a record references a region that is not in the config.
 
-    אנחנו נכשלים מהר (fail-fast) ולא בולעים את הרשומה בשקט: בליעה שקטה
-    של נתוני בריאות תשבש את הסכום הגלובלי בלי שום עקבות -- מישהו יראה
-    תוצאה שגויה בלי לדעת שאיבד רשומות. שגיאה מפורשת מכריחה לתקן את
-    המקור (data מלוכלך או config לא מסונכרן).
+    We fail fast rather than silently dropping the record: silently dropping
+    health data would corrupt the global sum with no trace -- someone would
+    see a wrong result without knowing records were lost. An explicit error
+    forces fixing the source (dirty data or an out-of-sync config).
     """
 
 
 def build_region_index(regions: list[str]) -> dict[str, int]:
     """
-    בונה lookup של region -> index מתוך הרשימה הסדורה בקונפיג.
+    Build a region -> index lookup from the ordered config list.
 
-    בונים dict פעם אחת ומשתמשים בו שוב, כדי שהוקטוריזציה תהיה O(N) על
-    מספר הרשומות במקום O(N*M) (חיפוש לינארי ברשימה לכל רשומה).
+    We build the dict once and reuse it, so vectorization is O(N) over the
+    number of records instead of O(N*M) (a linear scan of the list per record).
 
-    TODO 1: החזר dict שממפה כל region לאינדקס שלו.
-            רמז: enumerate(regions) נותן זוגות (idx, region).
+    TODO 1: Return a dict mapping each region to its index.
+            Hint: enumerate(regions) yields (idx, region) pairs.
             {region: idx for idx, region in enumerate(regions)}
     """
-    pass  # TODO 1
+    reg_ind = {}
+
+    for i, val in enumerate(regions):
+        reg_ind[val] = i
+
+    return reg_ind
 
 
 def vectorize(records: Iterable[str], regions: list[str], p: int) -> list[int]:
     """
-    ממיר iterable של תוויות region (אחת לכל חולה חיובי) לוקטור
-    ההיסטוגרמה V באורך M, מצומצם mod p.
+    Convert an iterable of region labels (one per positive case) into the
+    histogram vector V of length M, reduced mod p.
 
     Args:
-        records: iterable של תוויות region -- אחת לכל חולה חיובי.
-                 (כל איבר הוא ה-region של חולה בודד.)
-        regions: רשימת ה-regions הציבורית והסדורה מהקונפיג (אורך M).
-        p:       המודולוס הראשוני הציבורי.
+        records: iterable of region labels -- one per positive case.
+                 (Each element is the region of a single patient.)
+        regions: the public, ordered region list from config (length M).
+        p:       the public prime modulus.
 
     Returns:
-        V: list[int] באורך M, כאשר V[j] = (ספירה מקומית ל-regions[j]) % p.
+        V: list[int] of length M, where V[j] = (local count for regions[j]) % p.
 
     Raises:
-        UnknownRegionError: אם רשומה מפנה ל-region שלא קיים ב-regions.
+        UnknownRegionError: if a record references a region not in `regions`.
 
     -------------------------------------------------------------------
-    TODO 2: בנה את ה-lookup:   region_to_idx = build_region_index(regions)
-    TODO 3: אתחל את הוקטור:     M = len(regions); V = [0] * M
-    TODO 4: עבור על records. לכל record:
-              idx = region_to_idx.get(record)
-              - מקרה קצה: אם idx is None  ->  raise UnknownRegionError(...)
-                (record לא מוכר -- אל תבלע אותו)
-              - אחרת: V[idx] += 1
-    TODO 5: מקרה קצה / אינווריאנט: צמצם כל איבר mod p לפני ההחזרה.
-              V = [count % p for count in V]
-              זה זול, אידמפוטנטי, ומבטיח שכל איבר ב-[0, p) בכניסה
-              ל-split_into_shares. חשוב במיוחד לקראת share reduction
-              בהמשך, שם עובדים עם ערכים אקראיים מלאים ב-[0, p).
+    TODO 2: Build the lookup.
+    TODO 3: Initialize vector.
+    TODO 4: Iterate over records.
+    TODO 5: EDGE CASE / invariant: reduce every element mod p before returning.
+    
+              Cheap, idempotent, and guarantees every element is in [0, p)
+              before it reaches split_into_shares. Especially important for
+              the upcoming share reduction, which works with full random
+              values in [0, p).
     -------------------------------------------------------------------
     """
-    pass  # TODO 2-5
+    region_to_idx = build_region_index(regions)
+    M = len(regions)
+    V = [0] * M
 
+    for rec in records:
+        idx = region_to_idx.get(rec)
+        if idx is None:
+            raise UnknownRegionError(f"Unknown Region {rec!r}")
+        V[idx] += 1
+        
+    V = [count % p for count in V]
 
-if __name__ == "__main__":
-    # smoke test ידני -- הרץ אותי אחרי שתמלא את ה-TODOs
-    regions = ["72701", "72703", "72704"]
-    records = ["72701", "72701", "72703"]
-    v = vectorize(records, regions, p=1048573)
-    print("vector:", v)                 # מצופה: [2, 1, 0]
-    assert v == [2, 1, 0], f"got {v}"
-    print("smoke test passed")
+    return V
