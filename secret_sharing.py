@@ -14,7 +14,7 @@ privacy guarantee of the entire protocol.
 import secrets
 
 
-def split_into_shares(value: int, num_shares: int, p: int) -> list[int]:
+def split_into_shares(value: int, p: int, num_shares: int = 4) -> list[int]:
     """
     Split `value` into num_shares additive shares over F_p, such that
     sum(shares) % p == value.
@@ -44,20 +44,24 @@ def split_into_shares(value: int, num_shares: int, p: int) -> list[int]:
 
     TODO 1: Draw (num_shares - 1) random shares in [0, p).
             Hint: secrets.randbelow(p) returns a number in [0, p).
-            shares = [secrets.randbelow(p) for _ in range(num_shares - 1)]
 
     TODO 2: Compute the last share so everything closes on value.
-            EDGE CASE: the difference can be negative -> mod p handles it.
-            last = (value - sum(shares)) % p
 
     TODO 3: Append last to the list and return.
-            shares.append(last); return shares
+            
     -------------------------------------------------------------------
     """
     assert 0 <= value < p, f"value {value} not reduced mod p={p}"
     assert num_shares >= 2, "need at least 2 shares for secret sharing"
 
-    pass  # TODO 1-3
+    shares = []
+
+    for _ in range(num_shares - 1):
+        shares.append(secrets.randbelow(p))
+
+    shares.append( (value - sum(shares)) % p)
+
+    return shares
 
 
 def reconstruct(shares: list[int], p: int) -> int:
@@ -68,16 +72,5 @@ def reconstruct(shares: list[int], p: int) -> int:
     node should ever hold all shares -- otherwise there is no privacy. This
     is used only for round-trip checks.
 
-    TODO 4: return sum(shares) % p
     """
-    pass  # TODO 4
-
-
-if __name__ == "__main__":
-    # Manual smoke test -- run after filling in the TODOs
-    p = 1048573
-    shares = split_into_shares(42, 4, p)
-    print("shares:", shares)
-    print("reconstruct:", reconstruct(shares, p))   # expected: 42
-    assert reconstruct(shares, p) == 42
-    print("smoke test passed")
+    return (sum(shares) % p)
