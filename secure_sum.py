@@ -10,7 +10,7 @@ receives. No node ever learns another node's raw V -- only the final
 per-index sum is ever reconstructed (and only in Phase 3, by 2 nodes, via
 the Garbled Circuit).
 
-ASSUMPTIONS ABOUT node.py (adjust the TODOs below if your actual API differs):
+ASSUMPTIONS ABOUT node.py:
   - Node(node_id, config) or similar constructor
   - node.start_listener()                    -- begins listening for peers
   - node.connect_to_peer(peer_id)            -- opens a connection to peer_id
@@ -19,10 +19,7 @@ ASSUMPTIONS ABOUT node.py (adjust the TODOs below if your actual API differs):
                                                  messages; node.inbox.get()
                                                  blocks until a message arrives
   - split_into_shares(value, p, num_shares)  -- from secret_sharing.py
-                                                 (this exact argument order)
-
-If your real node.py has different method names, only the TODOs that touch
-the Node object need to change -- the algorithm shape stays the same.
+                                                 
 """
 
 from secret_sharing import split_into_shares
@@ -66,8 +63,15 @@ def compute_local_shares(V: list[int], p: int, node_ids: list[int]) -> dict[int,
             (sorted node_ids, e.g. [1,2,3,4]), not any other order.
     -------------------------------------------------------------------
     """
-    result: dict[int, list[int]] = {node_id: [] for node_id in node_ids}
-    pass  # TODO 1
+    result = {}
+    for id_ in node_ids:
+        result[id_] = []
+
+    for val in V:
+        shares = split_into_shares(val, p)
+        for id_, share in zip(node_ids, shares):
+            result[id_].append(share)
+
     return result
 
 
@@ -100,7 +104,19 @@ def distribute_shares(
     TODO 3: Return the local share vector for my_node_id.
     -------------------------------------------------------------------
     """
-    pass  # TODO 2-3
+    my_shareVec = None
+
+    for peer_id, share_vector in shares_by_peer.items():
+        if peer_id == my_node_id:
+            my_shareVec = share_vector
+            continue
+
+        send_fn(peer_id, {"shares": share_vector})
+    
+    if my_shareVec is None:
+        raise ValueError(f"my_node_id {my_node_id} not found in shares_by_peer")
+
+    return my_shareVec
 
 
 def collect_shares(inbox, num_expected: int) -> list[list[int]]:
@@ -132,6 +148,18 @@ def collect_shares(inbox, num_expected: int) -> list[list[int]]:
             don't leave it implicit.
     -------------------------------------------------------------------
     """
+    result = []
+
+    while len(result) < num_expected:
+        msg = inbox.get()
+        if "shares" in msg:
+            result.append(msg["shares"])
+            
+    return result
+
+
+
+
     pass  # TODO 4
 
 
