@@ -21,7 +21,8 @@ ASSUMPTIONS ABOUT node.py:
   - split_into_shares(value, p, num_shares)  -- from secret_sharing.py
                                                  
 """
-
+# todo: את הנוד נריץ 4 פעמים ונכניס לכל נוד את האיי די שלו וגם את הpath לקובץ מטופלים
+# וגם נתיב למפתח הפרטי שלו והמפתח הפומבי לכל בית חולים יפורסם בגיט
 from secret_sharing import split_into_shares
 
 
