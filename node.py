@@ -6,7 +6,7 @@ import socket
 import threading
 import queue
 
-NODES = 4
+NODES = 4 # TODO: put in config
 
 class Node:
     def __init__(self, node_id, config):
