@@ -6,7 +6,7 @@ import socket
 import threading
 import queue
 
-NODES = 4 # TODO: put in config
+NODES = 4 # TODO: put in config and put sigma for securing the messages each node sending
 
 class Node:
     def __init__(self, node_id, config):
