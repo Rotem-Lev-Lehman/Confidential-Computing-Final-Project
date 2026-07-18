@@ -1,0 +1,12 @@
+{
+  "description": "single region, clear",
+  "threshold": 50,
+  "region_ids": [
+    8001
+  ],
+  "bit_length": 16,
+  "a_shares": null,
+  "b_shares": [
+    20
+  ]
+}

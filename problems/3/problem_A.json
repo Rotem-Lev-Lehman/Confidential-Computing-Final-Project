@@ -1,0 +1,16 @@
+{
+  "description": "all above threshold (all quarantine)",
+  "threshold": 10,
+  "region_ids": [
+    3001,
+    3002,
+    3003
+  ],
+  "bit_length": 16,
+  "a_shares": [
+    20,
+    30,
+    40
+  ],
+  "b_shares": null
+}

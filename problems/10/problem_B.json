@@ -1,0 +1,26 @@
+{
+  "description": "eight regions, varied",
+  "threshold": 50,
+  "region_ids": [
+    10001,
+    10002,
+    10003,
+    10004,
+    10005,
+    10006,
+    10007,
+    10008
+  ],
+  "bit_length": 16,
+  "a_shares": null,
+  "b_shares": [
+    45,
+    0,
+    26,
+    24,
+    0,
+    2,
+    0,
+    30
+  ]
+}

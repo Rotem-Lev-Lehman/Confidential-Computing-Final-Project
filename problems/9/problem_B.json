@@ -1,0 +1,14 @@
+{
+  "description": "threshold 0: any positive sum crosses",
+  "threshold": 0,
+  "region_ids": [
+    9001,
+    9002
+  ],
+  "bit_length": 8,
+  "a_shares": null,
+  "b_shares": [
+    0,
+    0
+  ]
+}

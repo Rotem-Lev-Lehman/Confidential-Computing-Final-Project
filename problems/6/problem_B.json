@@ -1,0 +1,16 @@
+{
+  "description": "large values, 20-bit width",
+  "threshold": 100000,
+  "region_ids": [
+    6001,
+    6002,
+    6003
+  ],
+  "bit_length": 20,
+  "a_shares": null,
+  "b_shares": [
+    50000,
+    30000,
+    1
+  ]
+}
