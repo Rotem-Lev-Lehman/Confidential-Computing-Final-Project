@@ -1,0 +1,28 @@
+{
+  "description": "threshold 0: any positive sum crosses",
+  "threshold": 0,
+  "region_ids": [
+    9001,
+    9002
+  ],
+  "bit_length": 8,
+  "results": [
+    {
+      "region_index": 0,
+      "region_id": 9001,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    },
+    {
+      "region_index": 1,
+      "region_id": 9002,
+      "revealed": 9002,
+      "crossed": true,
+      "status": "QUARANTINE"
+    }
+  ],
+  "quarantined_region_ids": [
+    9002
+  ]
+}

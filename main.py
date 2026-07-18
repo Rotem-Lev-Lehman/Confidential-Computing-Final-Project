@@ -1,6 +1,4 @@
 """
-main.py
-=======
 Per-node entry point for the Secure COVID-19 Alert System (Phase 1: Secure Sum).
 
 Each of the 4 hospital nodes runs this file as its own process:
@@ -148,7 +146,3 @@ def main():
         num_nodes=num_nodes,
     )
     print(f"[node {args.node_id}] party {party} holds {letter}; wrote {out_path}")
-
-
-if __name__ == "__main__":
-    main()

@@ -1,0 +1,16 @@
+{
+  "description": "boundary: equal is clear, +1 crosses",
+  "threshold": 50,
+  "region_ids": [
+    4001,
+    4002,
+    4003
+  ],
+  "bit_length": 16,
+  "a_shares": null,
+  "b_shares": [
+    25,
+    25,
+    25
+  ]
+}

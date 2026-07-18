@@ -1,0 +1,45 @@
+{
+  "description": "basic mixed outcomes",
+  "threshold": 50,
+  "region_ids": [
+    1001,
+    1002,
+    1003,
+    1004
+  ],
+  "bit_length": 16,
+  "results": [
+    {
+      "region_index": 0,
+      "region_id": 1001,
+      "revealed": 1001,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 1,
+      "region_id": 1002,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    },
+    {
+      "region_index": 2,
+      "region_id": 1003,
+      "revealed": 1003,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 3,
+      "region_id": 1004,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    }
+  ],
+  "quarantined_region_ids": [
+    1001,
+    1003
+  ]
+}

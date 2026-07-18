@@ -1,0 +1,81 @@
+{
+  "description": "eight regions, varied",
+  "threshold": 50,
+  "region_ids": [
+    10001,
+    10002,
+    10003,
+    10004,
+    10005,
+    10006,
+    10007,
+    10008
+  ],
+  "bit_length": 16,
+  "results": [
+    {
+      "region_index": 0,
+      "region_id": 10001,
+      "revealed": 10001,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 1,
+      "region_id": 10002,
+      "revealed": 10002,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 2,
+      "region_id": 10003,
+      "revealed": 10003,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 3,
+      "region_id": 10004,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    },
+    {
+      "region_index": 4,
+      "region_id": 10005,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    },
+    {
+      "region_index": 5,
+      "region_id": 10006,
+      "revealed": 10006,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 6,
+      "region_id": 10007,
+      "revealed": 10007,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 7,
+      "region_id": 10008,
+      "revealed": 10008,
+      "crossed": true,
+      "status": "QUARANTINE"
+    }
+  ],
+  "quarantined_region_ids": [
+    10001,
+    10002,
+    10003,
+    10006,
+    10007,
+    10008
+  ]
+}
