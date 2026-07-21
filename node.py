@@ -9,12 +9,11 @@ import queue
 import sigma_handshake as sigma
 from secure_channel import encrypt_message, decrypt_message
 
-NODES = 4
-
 
 class Node:
-    def __init__(self, node_id, config, psk: bytes):
+    def __init__(self, node_id, config, psk: bytes, num_nodes: int):
         self.node_id = node_id
+        self.num_nodes = num_nodes
         self.peers = {nid: addr for nid, addr in config.items() if nid != node_id}
         self.inbox = queue.Queue()
         self.host = config[node_id]['host']
@@ -31,7 +30,7 @@ class Node:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((self.host, self.port))
-        s.listen(NODES - 1)
+        s.listen(self.num_nodes - 1)
 
         def accept_loop():
             while True:
