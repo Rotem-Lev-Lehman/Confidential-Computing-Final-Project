@@ -23,6 +23,11 @@ ASSUMPTIONS ABOUT node.py:
 """
 # todo: את הנוד נריץ 4 פעמים ונכניס לכל נוד את האיי די שלו וגם את הpath לקובץ מטופלים
 # וגם נתיב למפתח הפרטי שלו והמפתח הפומבי לכל בית חולים יפורסם בגיט
+# Each node is launched separately with: its node_id, a path to its local
+# records file, and the shared PSK (loaded from env/file, NOT committed to git).
+# Authentication uses a PSK + HMAC SIGMA variant, so there are no per-node
+# private/public key pairs.
+
 from secret_sharing import split_into_shares
 
 
@@ -159,11 +164,6 @@ def collect_shares(inbox, num_expected: int) -> list[list[int]]:
     return result
 
 
-
-
-    pass  # TODO 4
-
-
 def local_sum(all_share_vectors: list[list[int]], p: int) -> list[int]:
     """
     Sum this node's own share vector together with all received share
@@ -196,7 +196,18 @@ def local_sum(all_share_vectors: list[list[int]], p: int) -> list[int]:
             return result
     -------------------------------------------------------------------
     """
-    pass  # TODO 5-6
+    if not all_share_vectors:
+        raise ValueError("local_sum got no share vectors")
+ 
+    M = len(all_share_vectors[0])
+    if not all(len(v) == M for v in all_share_vectors):
+        raise ValueError("share vectors have mismatched lengths -- dropped/duplicated message upstream")
+ 
+    result = [0] * M
+    for share_vector in all_share_vectors:
+        for j in range(M):
+            result[j] = (result[j] + share_vector[j]) % p
+    return result
 
 
 def run_secure_sum(node_id: int, node, V: list[int], p: int, node_ids: list[int]) -> list[int]:
@@ -214,10 +225,21 @@ def run_secure_sum(node_id: int, node, V: list[int], p: int, node_ids: list[int]
     TODO 10: return local_sum([my_share] + received, p)
     -------------------------------------------------------------------
     """
-    pass  # TODO 7-10
+    shares_by_peer = compute_local_shares(V, p, node_ids)
+    my_share = distribute_shares(node_id, shares_by_peer, node.send)
+    received = collect_shares(node.inbox, num_expected=len(node_ids) - 1)
+    return local_sum([my_share] + received, p)
 
+def reconstruct_global(local_results: list[list[int]], p: int) -> list[int]:
+    """
+    Reconstruct the true Global Region Vector from every node's local_sum
+    result. In the real protocol this is NOT done by any single node (Phase 3
+    does the threshold check on secret shares) -- this helper exists only to
+    verify Phase 1's correctness in tests.
+    """
+    return local_sum(local_results, p)
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
     # Manual smoke test with FAKE nodes (no real networking) -- run this
     # first, before wiring in real node.py, to sanity-check the pure logic.
     #
@@ -234,4 +256,37 @@ if __name__ == "__main__":
     #     true sum: [10+3+0+7, 5+20+1+4] = [20, 30]
     #   - If they match, Phase 1's math is provably correct end-to-end,
     #     independent of the network layer.
-    print("Fill in TODO 11 for an in-process 4-node simulation.")
+ #   print("Fill in TODO 11 for an in-process 4-node simulation.")
+
+ 
+if __name__ == "__main__":
+    # In-process 4-node simulation (no networking) -- verifies Phase 1 math.
+    p = 1048573
+    node_ids = [1, 2, 3, 4]
+ 
+    local_vectors = {
+        1: [10, 5],
+        2: [3, 20],
+        3: [0, 1],
+        4: [7, 4],
+    }
+    true_sum = [20, 30]  # [10+3+0+7, 5+20+1+4]
+ 
+    # 1. every node splits its vector into shares for each peer
+    all_shares = {nid: compute_local_shares(local_vectors[nid], p, node_ids)
+                  for nid in node_ids}
+ 
+    # 2. simulate delivery: node nid "receives" all_shares[other][nid]
+    local_results = []
+    for nid in node_ids:
+        my_share = all_shares[nid][nid]
+        received = [all_shares[other][nid] for other in node_ids if other != nid]
+        local_results.append(local_sum([my_share] + received, p))
+ 
+    # 3. reconstruct and compare
+    G = reconstruct_global(local_results, p)
+    print("Reconstructed global vector:", G)
+    print("Expected:                   ", true_sum)
+    assert G == true_sum, f"MISMATCH: got {G}, expected {true_sum}"
+    print("PASS: Phase 1 secure-sum math is correct end-to-end.")
+ 
