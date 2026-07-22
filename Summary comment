@@ -1,0 +1,3 @@
+Read through the whole smpc_gc package carefully and ran the tests (9/9) plus my own boundary checks. This is excellent work — the from-scratch garbling (free-XOR + point-and-permute), the Chou–Orlandi OT, and the clean backend interface are all correct. I verified the threshold logic by hand: 50 → Clear, 51 → reveal, matching the proposal's "more than 50", carry handling is solid across every split, and sub-threshold regions leak only the Clear token. The why-not-just-what docstrings made this easy to review.
+
+Five notes below. Only #1 is a real decision, and it's a joint integration question between our two layers, not a defect in yours. Nothing here blocks.

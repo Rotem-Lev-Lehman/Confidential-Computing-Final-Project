@@ -1,0 +1,16 @@
+{
+  "description": "all below threshold (all clear)",
+  "threshold": 100,
+  "region_ids": [
+    2001,
+    2002,
+    2003
+  ],
+  "bit_length": 16,
+  "a_shares": [
+    10,
+    20,
+    30
+  ],
+  "b_shares": null
+}

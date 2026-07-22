@@ -1,0 +1,591 @@
+{
+  "quick": false,
+  "env": {
+    "date": "2026-07-22 01:34:16",
+    "platform": "Linux-6.17.0-35-generic-x86_64-with-glibc2.39",
+    "python": "3.11.11",
+    "cpu_count": 14
+  },
+  "problems": {
+    "rows": [
+      {
+        "problem": "1",
+        "regions": 4,
+        "bit_length": 16,
+        "expected": [
+          1001,
+          0,
+          1003,
+          0
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 7.003,
+            "revealed": [
+              1001,
+              0,
+              1003,
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 1.26,
+            "revealed": [
+              1001,
+              0,
+              1003,
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.285,
+            "revealed": [
+              1001,
+              0,
+              1003,
+              0
+            ],
+            "bytes_on_wire": 144,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      },
+      {
+        "problem": "2",
+        "regions": 3,
+        "bit_length": 16,
+        "expected": [
+          0,
+          0,
+          0
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 4.761,
+            "revealed": [
+              0,
+              0,
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 0.738,
+            "revealed": [
+              0,
+              0,
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.25,
+            "revealed": [
+              0,
+              0,
+              0
+            ],
+            "bytes_on_wire": 108,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      },
+      {
+        "problem": "3",
+        "regions": 3,
+        "bit_length": 16,
+        "expected": [
+          3001,
+          3002,
+          3003
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 4.404,
+            "revealed": [
+              3001,
+              3002,
+              3003
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 1.401,
+            "revealed": [
+              3001,
+              3002,
+              3003
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.213,
+            "revealed": [
+              3001,
+              3002,
+              3003
+            ],
+            "bytes_on_wire": 108,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      },
+      {
+        "problem": "4",
+        "regions": 3,
+        "bit_length": 16,
+        "expected": [
+          0,
+          4002,
+          0
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 5.773,
+            "revealed": [
+              0,
+              4002,
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 1.109,
+            "revealed": [
+              0,
+              4002,
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.179,
+            "revealed": [
+              0,
+              4002,
+              0
+            ],
+            "bytes_on_wire": 108,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      },
+      {
+        "problem": "5",
+        "regions": 4,
+        "bit_length": 16,
+        "expected": [
+          5001,
+          0,
+          0,
+          5004
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 5.295,
+            "revealed": [
+              5001,
+              0,
+              0,
+              5004
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 1.753,
+            "revealed": [
+              5001,
+              0,
+              0,
+              5004
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.282,
+            "revealed": [
+              5001,
+              0,
+              0,
+              5004
+            ],
+            "bytes_on_wire": 144,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      },
+      {
+        "problem": "6",
+        "regions": 3,
+        "bit_length": 20,
+        "expected": [
+          6001,
+          0,
+          0
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 5.24,
+            "revealed": [
+              6001,
+              0,
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 1.018,
+            "revealed": [
+              6001,
+              0,
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.165,
+            "revealed": [
+              6001,
+              0,
+              0
+            ],
+            "bytes_on_wire": 114,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      },
+      {
+        "problem": "7",
+        "regions": 1,
+        "bit_length": 16,
+        "expected": [
+          7001
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 1.767,
+            "revealed": [
+              7001
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 0.297,
+            "revealed": [
+              7001
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.302,
+            "revealed": [
+              7001
+            ],
+            "bytes_on_wire": 36,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      },
+      {
+        "problem": "8",
+        "regions": 1,
+        "bit_length": 16,
+        "expected": [
+          0
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 1.755,
+            "revealed": [
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 0.268,
+            "revealed": [
+              0
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.206,
+            "revealed": [
+              0
+            ],
+            "bytes_on_wire": 36,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      },
+      {
+        "problem": "9",
+        "regions": 2,
+        "bit_length": 8,
+        "expected": [
+          0,
+          9002
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 1.809,
+            "revealed": [
+              0,
+              9002
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 0.654,
+            "revealed": [
+              0,
+              9002
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.277,
+            "revealed": [
+              0,
+              9002
+            ],
+            "bytes_on_wire": 68,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      },
+      {
+        "problem": "10",
+        "regions": 8,
+        "bit_length": 16,
+        "expected": [
+          10001,
+          10002,
+          10003,
+          0,
+          0,
+          10006,
+          10007,
+          10008
+        ],
+        "runs": {
+          "yao-2048": {
+            "seconds_wall": 10.259,
+            "revealed": [
+              10001,
+              10002,
+              10003,
+              0,
+              0,
+              10006,
+              10007,
+              10008
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "yao-1024": {
+            "seconds_wall": 2.144,
+            "revealed": [
+              10001,
+              10002,
+              10003,
+              0,
+              0,
+              10006,
+              10007,
+              10008
+            ],
+            "bytes_on_wire": null,
+            "matches_solution": true
+          },
+          "mpyc": {
+            "seconds_wall": 0.267,
+            "revealed": [
+              10001,
+              10002,
+              10003,
+              0,
+              0,
+              10006,
+              10007,
+              10008
+            ],
+            "bytes_on_wire": 288,
+            "matches_solution": true
+          }
+        },
+        "backends_agree": true
+      }
+    ]
+  },
+  "scaling": {
+    "by_regions": [
+      {
+        "regions": 1,
+        "bit_length": 16,
+        "seconds": {
+          "yao-2048": 1.546,
+          "yao-1024": 0.482,
+          "mpyc": 0.166
+        }
+      },
+      {
+        "regions": 2,
+        "bit_length": 16,
+        "seconds": {
+          "yao-2048": 3.107,
+          "yao-1024": 0.763,
+          "mpyc": 0.268
+        }
+      },
+      {
+        "regions": 4,
+        "bit_length": 16,
+        "seconds": {
+          "yao-2048": 4.975,
+          "yao-1024": 1.476,
+          "mpyc": 0.205
+        }
+      },
+      {
+        "regions": 8,
+        "bit_length": 16,
+        "seconds": {
+          "yao-2048": 10.376,
+          "yao-1024": 3.039,
+          "mpyc": 0.206
+        }
+      }
+    ],
+    "by_bit_length": [
+      {
+        "regions": 4,
+        "bit_length": 8,
+        "seconds": {
+          "yao-2048": 3.713,
+          "yao-1024": 0.967,
+          "mpyc": 0.192
+        }
+      },
+      {
+        "regions": 4,
+        "bit_length": 16,
+        "seconds": {
+          "yao-2048": 4.936,
+          "yao-1024": 1.904,
+          "mpyc": 0.2
+        }
+      },
+      {
+        "regions": 4,
+        "bit_length": 24,
+        "seconds": {
+          "yao-2048": 7.838,
+          "yao-1024": 2.295,
+          "mpyc": 0.164
+        }
+      },
+      {
+        "regions": 4,
+        "bit_length": 32,
+        "seconds": {
+          "yao-2048": 9.768,
+          "yao-1024": 2.604,
+          "mpyc": 0.295
+        }
+      }
+    ]
+  },
+  "overhead": {
+    "yao-2048": 1.343,
+    "yao-1024": 0.344,
+    "mpyc": 0.187
+  },
+  "communication": {
+    "problem": "1",
+    "regions": 4,
+    "bit_length": 16,
+    "rows": {
+      "yao-2048": {
+        "bytes_total": 125977,
+        "bytes_per_region": 31494,
+        "messages": 20
+      },
+      "yao-1024": {
+        "bytes_total": 104969,
+        "bytes_per_region": 26242,
+        "messages": 20
+      }
+    }
+  },
+  "privacy": {
+    "secret_of_party0": 12345,
+    "party1_raw_view": 12345,
+    "mpyc_2party_input_leaked": true
+  },
+  "footprint": {
+    "yao_crypto_core": {
+      "files": 5,
+      "lines": 763,
+      "code_lines": 587
+    },
+    "yao_backend_adapter": {
+      "files": 1,
+      "lines": 180,
+      "code_lines": 145
+    },
+    "mpyc_backend_adapter": {
+      "files": 1,
+      "lines": 191,
+      "code_lines": 147
+    },
+    "shared_infrastructure": {
+      "files": 6,
+      "lines": 846,
+      "code_lines": 668
+    },
+    "external_mpyc_library": {
+      "files": 17,
+      "lines": 15862,
+      "code_lines": 12855
+    },
+    "runtime_dependencies": {
+      "yao": [],
+      "mpyc": [
+        "mpyc"
+      ]
+    },
+    "mpyc_version": "0.11"
+  },
+  "total_seconds": 131.4
+}

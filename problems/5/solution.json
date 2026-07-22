@@ -1,0 +1,45 @@
+{
+  "description": "larger threshold 1000",
+  "threshold": 1000,
+  "region_ids": [
+    5001,
+    5002,
+    5003,
+    5004
+  ],
+  "bit_length": 16,
+  "results": [
+    {
+      "region_index": 0,
+      "region_id": 5001,
+      "revealed": 5001,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 1,
+      "region_id": 5002,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    },
+    {
+      "region_index": 2,
+      "region_id": 5003,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    },
+    {
+      "region_index": 3,
+      "region_id": 5004,
+      "revealed": 5004,
+      "crossed": true,
+      "status": "QUARANTINE"
+    }
+  ],
+  "quarantined_region_ids": [
+    5001,
+    5004
+  ]
+}

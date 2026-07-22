@@ -1,0 +1,18 @@
+{
+  "description": "basic mixed outcomes",
+  "threshold": 50,
+  "region_ids": [
+    1001,
+    1002,
+    1003,
+    1004
+  ],
+  "bit_length": 16,
+  "a_shares": null,
+  "b_shares": [
+    25,
+    5,
+    26,
+    5
+  ]
+}

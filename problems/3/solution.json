@@ -1,0 +1,38 @@
+{
+  "description": "all above threshold (all quarantine)",
+  "threshold": 10,
+  "region_ids": [
+    3001,
+    3002,
+    3003
+  ],
+  "bit_length": 16,
+  "results": [
+    {
+      "region_index": 0,
+      "region_id": 3001,
+      "revealed": 3001,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 1,
+      "region_id": 3002,
+      "revealed": 3002,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 2,
+      "region_id": 3003,
+      "revealed": 3003,
+      "crossed": true,
+      "status": "QUARANTINE"
+    }
+  ],
+  "quarantined_region_ids": [
+    3001,
+    3002,
+    3003
+  ]
+}
