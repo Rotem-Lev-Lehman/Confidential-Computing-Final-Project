@@ -38,9 +38,13 @@ def split_into_shares(value: int, p: int, num_shares: int = 4) -> list[int]:
         list[int] of length num_shares, each in [0, p), summing mod p to value.
 
     -------------------------------------------------------------------
-    The two asserts below are a safety net -- they catch a logic bug (an
+    The two guards below are a safety net -- they catch a logic bug (an
     unreduced value, or a wrong num_shares) early, instead of silently
     producing broken shares.
+
+    They are explicit `raise ValueError`, not `assert`: `python -O` strips
+    asserts, which would silently disable exactly the check that protects
+    the sharing from producing garbage.
 
     TODO 1: Draw (num_shares - 1) random shares in [0, p).
             Hint: secrets.randbelow(p) returns a number in [0, p).
@@ -51,8 +55,12 @@ def split_into_shares(value: int, p: int, num_shares: int = 4) -> list[int]:
             
     -------------------------------------------------------------------
     """
-    assert 0 <= value < p, f"value {value} not reduced mod p={p}"
-    assert num_shares >= 2, "need at least 2 shares for secret sharing"
+    if not 0 <= value < p:
+        raise ValueError(f"value {value} not reduced mod p={p}")
+    if num_shares < 2:
+        raise ValueError(
+            f"need at least 2 shares for secret sharing, got {num_shares}"
+        )
 
     shares = []
 
