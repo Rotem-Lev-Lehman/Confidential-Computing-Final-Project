@@ -21,13 +21,10 @@ ASSUMPTIONS ABOUT node.py:
   - split_into_shares(value, p, num_shares)  -- from secret_sharing.py
                                                  
 """
-# todo: את הנוד נריץ 4 פעמים ונכניס לכל נוד את האיי די שלו וגם את הpath לקובץ מטופלים
-# וגם נתיב למפתח הפרטי שלו והמפתח הפומבי לכל בית חולים יפורסם בגיט
-# Each node is launched separately with: its node_id, a path to its local
-# records file, and the shared PSK (loaded from env/file, NOT committed to git).
-# Authentication uses a PSK + HMAC SIGMA variant, so there are no per-node
-# private/public key pairs.
-
+# Each node is launched separately (main.py) with: its node_id, a path to
+# its local records file, and the shared PSK (loaded from env/file, NOT
+# committed to git). Authentication uses a PSK + HMAC SIGMA variant, so there
+# are no per-node private/public key pairs.
 from secret_sharing import split_into_shares
 
 
@@ -153,14 +150,26 @@ def collect_shares(inbox, num_expected: int) -> list[list[int]]:
             Document whichever assumption you pick as a comment --
             don't leave it implicit.
     -------------------------------------------------------------------
+
+    ASSUMPTION: the inbox is shared across protocol phases, so a message that
+    is not a Phase 1 share (e.g. a fast peer's Phase 2 message arriving while we
+    are still collecting here) must NOT be dropped -- it is held aside and put
+    back before returning.  Discarding it instead would lose that peer's Phase 2
+    contribution permanently and deadlock the next phase.
     """
     result = []
+    holdover = []
 
     while len(result) < num_expected:
         msg = inbox.get()
         if "shares" in msg:
             result.append(msg["shares"])
-            
+        else:
+            holdover.append(msg)
+
+    for msg in holdover:
+        inbox.put(msg)
+
     return result
 
 
@@ -198,11 +207,11 @@ def local_sum(all_share_vectors: list[list[int]], p: int) -> list[int]:
     """
     if not all_share_vectors:
         raise ValueError("local_sum got no share vectors")
- 
+
     M = len(all_share_vectors[0])
     if not all(len(v) == M for v in all_share_vectors):
         raise ValueError("share vectors have mismatched lengths -- dropped/duplicated message upstream")
- 
+
     result = [0] * M
     for share_vector in all_share_vectors:
         for j in range(M):
@@ -230,6 +239,7 @@ def run_secure_sum(node_id: int, node, V: list[int], p: int, node_ids: list[int]
     received = collect_shares(node.inbox, num_expected=len(node_ids) - 1)
     return local_sum([my_share] + received, p)
 
+
 def reconstruct_global(local_results: list[list[int]], p: int) -> list[int]:
     """
     Reconstruct the true Global Region Vector from every node's local_sum
@@ -239,31 +249,12 @@ def reconstruct_global(local_results: list[list[int]], p: int) -> list[int]:
     """
     return local_sum(local_results, p)
 
-#if __name__ == "__main__":
-    # Manual smoke test with FAKE nodes (no real networking) -- run this
-    # first, before wiring in real node.py, to sanity-check the pure logic.
-    #
-    # TODO 11: Simulate 4 nodes entirely in-process:
-    #   - Give each node a small local vector, e.g. node 1 -> [10, 5],
-    #     node 2 -> [3, 20], node 3 -> [0, 1], node 4 -> [7, 4]
-    #   - For each node, call compute_local_shares(...) to get its
-    #     shares_by_peer dict
-    #   - Instead of real networking, manually redistribute: build, for
-    #     each node_id, the list of share-vectors it "received" by
-    #     picking out shares_by_peer[node_id] from every other node's dict
-    #   - Call local_sum(...) for each node and collect all 4 results
-    #   - Sum all 4 local results element-wise mod p, and compare to the
-    #     true sum: [10+3+0+7, 5+20+1+4] = [20, 30]
-    #   - If they match, Phase 1's math is provably correct end-to-end,
-    #     independent of the network layer.
- #   print("Fill in TODO 11 for an in-process 4-node simulation.")
 
- 
 if __name__ == "__main__":
     # In-process 4-node simulation (no networking) -- verifies Phase 1 math.
     p = 1048573
     node_ids = [1, 2, 3, 4]
- 
+
     local_vectors = {
         1: [10, 5],
         2: [3, 20],
@@ -271,22 +262,21 @@ if __name__ == "__main__":
         4: [7, 4],
     }
     true_sum = [20, 30]  # [10+3+0+7, 5+20+1+4]
- 
+
     # 1. every node splits its vector into shares for each peer
     all_shares = {nid: compute_local_shares(local_vectors[nid], p, node_ids)
                   for nid in node_ids}
- 
+
     # 2. simulate delivery: node nid "receives" all_shares[other][nid]
     local_results = []
     for nid in node_ids:
         my_share = all_shares[nid][nid]
         received = [all_shares[other][nid] for other in node_ids if other != nid]
         local_results.append(local_sum([my_share] + received, p))
- 
+
     # 3. reconstruct and compare
     G = reconstruct_global(local_results, p)
     print("Reconstructed global vector:", G)
     print("Expected:                   ", true_sum)
     assert G == true_sum, f"MISMATCH: got {G}, expected {true_sum}"
     print("PASS: Phase 1 secure-sum math is correct end-to-end.")
- 
