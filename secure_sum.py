@@ -22,9 +22,9 @@ ASSUMPTIONS ABOUT node.py:
                                                  
 """
 # Each node is launched separately (main.py) with: its node_id, a path to
-# its local records file, and the shared PSK (loaded from env/file, NOT
-# committed to git). Authentication uses a PSK + HMAC SIGMA variant, so there
-# are no per-node private/public key pairs.
+# its local records file, and the path to its own Ed25519 private signing key
+# (keys/node<N>.key, never committed). The matching public keys are published
+# in config.json, so SIGMA authenticates which specific node each peer is.
 from secret_sharing import split_into_shares
 
 
@@ -194,8 +194,8 @@ def local_sum(all_share_vectors: list[list[int]], p: int) -> list[int]:
     TODO 5: EDGE CASE: guard against empty input or mismatched lengths
             before summing -- a length mismatch here means a bug
             upstream (dropped or duplicated message) and should be
-            caught loudly, not silently zero-padded.
-            assert all(len(v) == len(all_share_vectors[0]) for v in all_share_vectors)
+            caught loudly, not silently zero-padded.  Use an explicit
+            `raise ValueError`, not `assert` -- `python -O` strips asserts.
 
     TODO 6: M = len(all_share_vectors[0])
             result = [0] * M
@@ -278,5 +278,6 @@ if __name__ == "__main__":
     G = reconstruct_global(local_results, p)
     print("Reconstructed global vector:", G)
     print("Expected:                   ", true_sum)
-    assert G == true_sum, f"MISMATCH: got {G}, expected {true_sum}"
+    if G != true_sum:
+        raise SystemExit(f"MISMATCH: got {G}, expected {true_sum}")
     print("PASS: Phase 1 secure-sum math is correct end-to-end.")
