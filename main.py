@@ -9,24 +9,26 @@ Each of the 4 hospital nodes runs this file as its own process:
     python main.py --node-id 2 --records data/hospital2.txt
     ...
 
-The shared PSK is read from the HOSPITAL_PSK environment variable (never
-committed to git). All 4 nodes must use the same PSK.
+Each node authenticates with its OWN Ed25519 identity key, read from
+keys/node<N>.key (never committed). The matching public keys live in
+config.json. There is no shared secret.
 
 Flow per node:
   1. load config (public: p, regions, node addresses)
-  2. build a Node with the shared PSK
+  2. build a Node with this node's private identity key
   3. start listening, then SIGMA-handshake-connect to every peer
   4. read local records -> vectorize into V
   5. run the secure sum -> this node's share of the Global Region Vector
   6. print the local result (Phase 2/3 will consume the shares later)
 """
 
-import os
 import sys
 import time
 import argparse
+from pathlib import Path
 
 from config_loader import load_config
+from sigma_handshake import load_signing_key
 from vectorize import vectorize
 from secure_sum import run_secure_sum
 from share_reduction import GARBLER_ID, EVALUATOR_ID, run_share_reduction
@@ -38,11 +40,14 @@ def config_to_node_dict(config) -> dict[int, dict]:
     """
     Bridge the config_loader dataclass to the plain dict shape node.py expects.
 
-    config_loader returns Config(nodes={id: NodeConfig(host, port)}), but
-    Node indexes config[node_id]['host']. This adapter keeps both layers
-    unchanged and converts between them in one place.
+    config_loader returns Config(nodes={id: NodeConfig(...)}), but Node indexes
+    config[node_id]['host']. This adapter keeps both layers unchanged and
+    converts between them in one place.
     """
-    return {nid: {"host": nc.host, "port": nc.port} for nid, nc in config.nodes.items()}
+    return {
+        nid: {"host": nc.host, "port": nc.port, "public_key": nc.public_key}
+        for nid, nc in config.nodes.items()
+    }
 
 
 def load_records(path: str) -> list[str]:
@@ -54,24 +59,32 @@ def load_records(path: str) -> list[str]:
         return [line.strip() for line in f if line.strip()]
 
 
-def load_psk() -> bytes:
-    """Read the shared PSK from the environment. Fail loudly if missing."""
-    psk = os.environ.get("HOSPITAL_PSK")
-    if not psk:
+def load_identity_key(node_id: int, key_path: str | None):
+    """Load this node's PRIVATE Ed25519 signing key.
+
+    Each node has its own key -- there is no shared secret. Generate them with
+    keygen.py; the matching public keys live in config.json.
+    """
+    path = Path(key_path) if key_path else Path("keys") / f"node{node_id}.key"
+    if not path.exists():
         print(
-            "ERROR: HOSPITAL_PSK environment variable not set.\n"
-            "All nodes must share the same PSK, e.g.:\n"
-            "  export HOSPITAL_PSK='some-long-shared-secret'",
+            f"ERROR: signing key not found at {path}\n"
+            "Generate the identity keys first:\n"
+            "  python3 keygen.py\n"
+            "then paste the printed public keys into config.json.",
             file=sys.stderr,
         )
         sys.exit(1)
-    return psk.encode("utf-8")
+    return load_signing_key(path)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Secure Sum hospital node")
     parser.add_argument("--node-id", type=int, required=True, help="this node's id (1..4)")
     parser.add_argument("--records", type=str, required=True, help="path to local records file")
+    parser.add_argument("--key", type=str, default=None,
+                        help="path to this node's private signing key "
+                             "(default: keys/node<ID>.key)")
     parser.add_argument("--connect-delay", type=float, default=1.0,
                         help="seconds to wait for peers' listeners before connecting")
     parser.add_argument("--threshold", type=int, default=50,
@@ -85,14 +98,14 @@ def main():
     regions = config.regions
     node_ids = sorted(config.nodes.keys())
     num_nodes = len(node_ids)
-    psk = load_psk()
+    signing_key = load_identity_key(args.node_id, args.key)
 
     if args.node_id not in node_ids:
         print(f"ERROR: node-id {args.node_id} not in config nodes {node_ids}", file=sys.stderr)
         sys.exit(1)
 
     # 1-2. build the node
-    node = Node(args.node_id, config_to_node_dict(config), psk, num_nodes)
+    node = Node(args.node_id, config_to_node_dict(config), signing_key, num_nodes)
 
     # 3. start listening, give peers a moment to come up, then connect to all
     node.start_listener()
