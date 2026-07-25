@@ -1,26 +1,37 @@
 # confidential_computing
 
-import time
+import time                 # FIX: was `from datetime import time` (wrong `time`, no .sleep)
 import json
 import socket
 import threading
 import queue
 
 import sigma_handshake as sigma
+from sigma_handshake import HandshakeError, load_public_key
 from secure_channel import encrypt_message, decrypt_message
 
-
 class Node:
-    def __init__(self, node_id, config, psk: bytes, num_nodes: int):
+    def __init__(self, node_id, config, signing_key, num_nodes: int):
+        """
+        Args:
+            node_id: this node's id.
+            config: {node_id: {"host", "port", "public_key"}} -- public config.
+            signing_key: this node's PRIVATE Ed25519 key (see keygen.py).
+            num_nodes: how many nodes participate.
+        """
         self.node_id = node_id
-        self.num_nodes = num_nodes
         self.peers = {nid: addr for nid, addr in config.items() if nid != node_id}
         self.inbox = queue.Queue()
         self.host = config[node_id]['host']
         self.port = config[node_id]['port']
         self.connections = {}       # peer_id -> socket (outbound, for sending)
         self.session_keys = {}      # peer_id -> 32-byte SIGMA session key
-        self.psk = psk              # pre-shared key, same for all nodes (from config/env)
+        self.signing_key = signing_key   # our long-term identity key (secret)
+        # Every peer's public key, so we can verify who we are talking to.
+        self.peer_public_keys = {
+            nid: load_public_key(entry["public_key"]) for nid, entry in config.items()
+        }
+        self.num_nodes = num_nodes
         self._keys_lock = threading.Lock()  # session_keys is touched by multiple threads
 
     # ------------------------------------------------------------------
@@ -52,15 +63,21 @@ class Node:
         if not line:
             return
         msg1 = json.loads(line)
-        peer_id = msg1["from"]
-        state, msg2 = sigma.responder_handle_msg1(msg1, self.psk)
-        conn.sendall((json.dumps({"from": self.node_id, **msg2}) + "\n").encode("utf-8"))
+        state, msg2 = sigma.responder_handle_msg1(msg1, self.node_id, self.signing_key)
+        conn.sendall((json.dumps(msg2) + "\n").encode("utf-8"))
 
         line = f.readline()
         if not line:
             return
         msg3 = json.loads(line)
-        session_key = sigma.responder_handle_msg3(msg3, state, self.psk)
+        try:
+            # Authenticates WHICH node the peer is, via its Ed25519 signature.
+            session_key, peer_id = sigma.responder_handle_msg3(
+                msg3, state, self.peer_public_keys
+            )
+        except HandshakeError:
+            conn.close()   # authentication failed: drop the connection, no traffic
+            raise
         # NOTE: this key belongs to THIS inbound socket only. The outbound
         # socket to the same peer (opened by connect_to_peer) runs its own
         # separate handshake with its own key. We deliberately do NOT store
@@ -91,20 +108,23 @@ class Node:
                 self._do_initiator_handshake(peer_id, s)
                 return
             except ConnectionRefusedError:
-                time.sleep(delay)
+                time.sleep(delay)     # FIX: retry now actually loops (raise moved out of loop)
         raise ConnectionError(f"Could not connect to peer {peer_id}")
 
     def _do_initiator_handshake(self, peer_id, s):
         """Run the SIGMA initiator side over an already-connected socket."""
         f = s.makefile('r')
 
-        state, msg1 = sigma.initiator_start()
-        s.sendall((json.dumps({"from": self.node_id, **msg1}) + "\n").encode("utf-8"))
+        state, msg1 = sigma.initiator_start(self.node_id)
+        s.sendall((json.dumps(msg1) + "\n").encode("utf-8"))
 
         line = f.readline()
         msg2 = json.loads(line)
-        session_key, msg3 = sigma.initiator_handle_msg2(msg2, state, self.psk)
-        s.sendall((json.dumps({"from": self.node_id, **msg3}) + "\n").encode("utf-8"))
+        # Verifies the responder really is `peer_id` before we send anything.
+        session_key, msg3 = sigma.initiator_handle_msg2(
+            msg2, state, peer_id, self.peer_public_keys[peer_id], self.signing_key
+        )
+        s.sendall((json.dumps(msg3) + "\n").encode("utf-8"))
 
         with self._keys_lock:
             self.session_keys[peer_id] = session_key
