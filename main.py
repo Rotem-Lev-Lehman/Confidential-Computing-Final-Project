@@ -29,6 +29,8 @@ import argparse
 from config_loader import load_config
 from vectorize import vectorize
 from secure_sum import run_secure_sum
+from share_reduction import GARBLER_ID, EVALUATOR_ID, run_share_reduction
+from gc_handoff import region_ids_from_config, write_problem
 from node import Node
 
 
@@ -72,6 +74,10 @@ def main():
     parser.add_argument("--records", type=str, required=True, help="path to local records file")
     parser.add_argument("--connect-delay", type=float, default=1.0,
                         help="seconds to wait for peers' listeners before connecting")
+    parser.add_argument("--threshold", type=int, default=50,
+                        help="quarantine threshold (a region crosses when count > threshold)")
+    parser.add_argument("--gc-out", type=str, default="gc_input",
+                        help="directory for the Garbled Circuit problem file (nodes 1 and 2)")
     args = parser.parse_args()
 
     config = load_config()
@@ -107,6 +113,28 @@ def main():
 
     # 6. output this node's share of the Global Region Vector
     print(f"[node {args.node_id}] local share of global vector: {local_result}")
+
+    # 7. Phase 2: reduce the 4 nodes to the 2 parties the Garbled Circuit needs.
+    #    Every node contributes; only nodes 1 and 2 end up holding a vector.
+    reduced = run_share_reduction(args.node_id, node, V, node_ids)
+    if reduced is None:
+        print(f"[node {args.node_id}] contributed to share reduction; done")
+        return
+
+    # 8. Write the problem file for the GC layer.  Node 1 is the Garbler
+    #    (party 0, holds A); Node 2 is the Evaluator (party 1, holds B).
+    party = 0 if args.node_id == GARBLER_ID else 1
+    letter = "A" if party == 0 else "B"
+    out_path = f"{args.gc_out}/problem_{letter}.json"
+    write_problem(
+        out_path,
+        party=party,
+        shares=reduced,
+        region_ids=region_ids_from_config(regions),
+        threshold=args.threshold,
+        num_nodes=num_nodes,
+    )
+    print(f"[node {args.node_id}] party {party} holds {letter}; wrote {out_path}")
 
 
 if __name__ == "__main__":
