@@ -288,7 +288,9 @@ if __name__ == "__main__":
     key_i, msg3 = initiator_handle_msg2(msg2, st_i, 2, pubs[2], a_sk)
     key_r, who = responder_handle_msg3(msg3, st_r, pubs)
 
-    assert key_i == key_r, "session keys differ!"
-    assert who == 1, f"authenticated the wrong initiator: {who}"
+    if key_i != key_r:
+        raise SystemExit("session keys differ!")
+    if who != 1:
+        raise SystemExit(f"authenticated the wrong initiator: {who}")
     print("handshake OK -- authenticated node", who,
           "| session key:", key_i.hex()[:16], "...")
