@@ -7,6 +7,7 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 class NodeConfig:
     host: str
     port: int
+    public_key: str   # hex Ed25519 identity key - public by design
 
 
 @dataclass
@@ -85,14 +86,17 @@ def load_config(path: str = CONFIG_PATH) -> Config:
                 f"Invalid node id: {node_id}"
             )
 
-        if "host" not in node_data or "port" not in node_data:
-            raise ValueError(
-                f"Node {node_id} missing host/port"
-            )
+        for field in ("host", "port", "public_key"):
+            if field not in node_data:
+                raise ValueError(
+                    f"Node {node_id} missing {field!r} "
+                    "(run keygen.py, then paste the public keys into config.json)"
+                )
 
         nodes[node_id] = NodeConfig(
             host=node_data["host"],
-            port=node_data["port"]
+            port=node_data["port"],
+            public_key=node_data["public_key"]
         )
 
     # validate number of nodes
