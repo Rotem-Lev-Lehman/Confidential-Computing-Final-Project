@@ -273,24 +273,3 @@ def responder_handle_msg3(msg3: dict, state: dict, peer_public_keys: dict):
         raise HandshakeError(f"initiator {initiator_id} identity MAC invalid")
 
     return state["session_key"], initiator_id
-
-
-if __name__ == "__main__":
-    # Smoke test: a full handshake between two freshly keyed identities.
-    a_priv_raw, a_pub_raw = generate_identity_keypair()
-    b_priv_raw, b_pub_raw = generate_identity_keypair()
-    a_sk = Ed25519PrivateKey.from_private_bytes(a_priv_raw)
-    b_sk = Ed25519PrivateKey.from_private_bytes(b_priv_raw)
-    pubs = {1: load_public_key(a_pub_raw.hex()), 2: load_public_key(b_pub_raw.hex())}
-
-    st_i, msg1 = initiator_start(my_id=1)
-    st_r, msg2 = responder_handle_msg1(msg1, my_id=2, my_signing_key=b_sk)
-    key_i, msg3 = initiator_handle_msg2(msg2, st_i, 2, pubs[2], a_sk)
-    key_r, who = responder_handle_msg3(msg3, st_r, pubs)
-
-    if key_i != key_r:
-        raise SystemExit("session keys differ!")
-    if who != 1:
-        raise SystemExit(f"authenticated the wrong initiator: {who}")
-    print("handshake OK -- authenticated node", who,
-          "| session key:", key_i.hex()[:16], "...")

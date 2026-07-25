@@ -8,6 +8,8 @@ Run with:  python3 test_share_reduction.py
 
 import secrets
 
+import pytest
+
 from share_reduction import (
     MASK_BITS,
     add_vectors,
@@ -30,7 +32,6 @@ def test_split_reconstructs_exactly():
     for v in (0, 1, 50, 51, 999, 65535):
         a, b = split_for_two(v)
         assert a + b == v + M, f"v={v}: {a}+{b} != {v}+{M}"
-    print("PASS: test_split_reconstructs_exactly")
 
 
 def test_shares_non_negative():
@@ -39,7 +40,6 @@ def test_shares_non_negative():
         v = secrets.randbelow(70000)
         a, b = split_for_two(v)
         assert a >= 0 and b >= 0, f"negative share for v={v}: ({a}, {b})"
-    print("PASS: test_shares_non_negative")
 
 
 def test_mask_independent_of_value():
@@ -49,7 +49,6 @@ def test_mask_independent_of_value():
         for _ in range(200):
             a, _ = split_for_two(v)
             assert 0 <= a < M, f"a={a} outside [0,{M})"
-    print("PASS: test_mask_independent_of_value")
 
 
 def test_four_node_reconstruction():
@@ -67,7 +66,6 @@ def test_four_node_reconstruction():
 
         off = offset(len(NODE_IDS))
         assert [a + b - off for a, b in zip(A, B)] == true
-    print("PASS: test_four_node_reconstruction (200 scenarios)")
 
 
 def test_threshold_decisions_preserved():
@@ -87,7 +85,6 @@ def test_threshold_decisions_preserved():
         got = [(a + b) > sthr for a, b in zip(A, B)]
         want = [t > thr for t in true]
         assert got == want, f"verdicts diverged: {got} vs {want}"
-    print("PASS: test_threshold_decisions_preserved (200 scenarios)")
 
 
 def test_boundary_exactly_at_threshold():
@@ -106,7 +103,6 @@ def test_boundary_exactly_at_threshold():
         A, B = add_vectors(a_parts), add_vectors(b_parts)
         crossed = (A[0] + B[0]) > sthr
         assert crossed == expect, f"total={total}: crossed={crossed}, expected {expect}"
-    print("PASS: test_boundary_exactly_at_threshold")
 
 
 def test_agrees_with_phase1():
@@ -130,7 +126,6 @@ def test_agrees_with_phase1():
     A, B = add_vectors(a_parts), add_vectors(b_parts)
 
     assert verify_against_phase1(A, B, phase1_global, P, len(NODE_IDS))
-    print("PASS: test_agrees_with_phase1")
 
 
 def test_bit_length_sufficient():
@@ -144,26 +139,9 @@ def test_bit_length_sufficient():
         b_parts.append(bv)
     A, B = add_vectors(a_parts), add_vectors(b_parts)
     assert all(x < (1 << bl) for x in A + B), "share exceeds advertised bit_length"
-    print(f"PASS: test_bit_length_sufficient (bit_length={bl})")
 
 
 def test_mismatched_lengths_rejected():
     """A dropped/duplicated message must fail loudly, not silently zero-pad."""
-    try:
+    with pytest.raises(ValueError):
         add_vectors([[1, 2, 3], [1, 2]])
-        assert False, "expected ValueError on mismatched lengths"
-    except ValueError:
-        print("PASS: test_mismatched_lengths_rejected")
-
-
-if __name__ == "__main__":
-    test_split_reconstructs_exactly()
-    test_shares_non_negative()
-    test_mask_independent_of_value()
-    test_four_node_reconstruction()
-    test_threshold_decisions_preserved()
-    test_boundary_exactly_at_threshold()
-    test_agrees_with_phase1()
-    test_bit_length_sufficient()
-    test_mismatched_lengths_rejected()
-    print("\nAll share_reduction tests passed.")

@@ -39,7 +39,6 @@ def test_send_wraps_with_gc_key():
     assert peer_id == 2, f"sent to {peer_id}"
     assert msg[GC_KEY] == {"type": "garbled"}, msg
     assert msg["from"] == 1
-    print("PASS: test_send_wraps_with_gc_key")
 
 
 def test_recv_returns_unwrapped():
@@ -47,7 +46,6 @@ def test_recv_returns_unwrapped():
     node.inbox.put({GC_KEY: {"A": 12345}, "from": 2})
     ch = NodeChannel(node, peer_id=2)
     assert ch.recv() == {"A": 12345}
-    print("PASS: test_recv_returns_unwrapped")
 
 
 def test_non_gc_messages_are_not_dropped():
@@ -67,7 +65,6 @@ def test_non_gc_messages_are_not_dropped():
         survivors.append(node.inbox.get())
     assert {"shares": [1, 2, 3]} in survivors, survivors
     assert {"reduce": [4, 5, 6]} in survivors, survivors
-    print("PASS: test_non_gc_messages_are_not_dropped")
 
 
 def test_recv_timeout_raises_clean_error():
@@ -81,7 +78,6 @@ def test_recv_timeout_raises_clean_error():
     except ConnectionError as exc:
         assert "died mid-session" in str(exc), str(exc)
     assert time.monotonic() - t0 < 3, "timeout did not fire promptly"
-    print("PASS: test_recv_timeout_raises_clean_error")
 
 
 def test_closed_channel_rejects_use():
@@ -94,7 +90,6 @@ def test_closed_channel_rejects_use():
             assert False, "expected ConnectionError on closed channel"
         except ConnectionError:
             pass
-    print("PASS: test_closed_channel_rejects_use")
 
 
 # --- end-to-end: real GC engine over the real encrypted transport ----------
@@ -109,12 +104,20 @@ def test_yao_over_encrypted_transport():
     from smpc_gc.backends.yao_backend import YaoBackend
     from smpc_gc.yao.ot import GROUP_1024
 
-    PSK = b"integration-test-psk"
-    config = {1: {"host": "127.0.0.1", "port": 9401},
-              2: {"host": "127.0.0.1", "port": 9402}}
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from sigma_handshake import generate_identity_keypair
 
-    n1 = Node(1, config, PSK, num_nodes=2)
-    n2 = Node(2, config, PSK, num_nodes=2)
+    # Per-node identity keys: no shared secret anywhere.
+    keys = {}
+    config = {}
+    for nid, port in ((1, 9401), (2, 9402)):
+        priv_raw, pub_raw = generate_identity_keypair()
+        keys[nid] = Ed25519PrivateKey.from_private_bytes(priv_raw)
+        config[nid] = {"host": "127.0.0.1", "port": port,
+                       "public_key": pub_raw.hex()}
+
+    n1 = Node(1, config, keys[1], num_nodes=2)
+    n2 = Node(2, config, keys[2], num_nodes=2)
     n1.start_listener()
     n2.start_listener()
     time.sleep(0.4)
@@ -177,17 +180,6 @@ def test_yao_over_encrypted_transport():
     assert [r.revealed for r in results[0]] == [r.revealed for r in results[1]], \
         "the two parties disagree on the public result"
 
-    print("PASS: test_yao_over_encrypted_transport")
     for r, t_count in zip(results[0], true_counts):
         print(f"      region {r.region_id}: true={t_count:3d} -> "
               f"revealed={r.revealed:5d} ({r.status})")
-
-
-if __name__ == "__main__":
-    test_send_wraps_with_gc_key()
-    test_recv_returns_unwrapped()
-    test_non_gc_messages_are_not_dropped()
-    test_recv_timeout_raises_clean_error()
-    test_closed_channel_rejects_use()
-    test_yao_over_encrypted_transport()
-    print("\nAll gc_channel tests passed.")
