@@ -28,8 +28,8 @@ traffic (garbled tables, OT values) is protected exactly like Phase 1/2 traffic:
 * delivery keyed by the SIGMA-authenticated peer id, so the evaluator cannot be
   fed a garbled circuit by anyone other than the garbler it handshook with;
 * phase tagging, so Phase 3 traffic can never be consumed by a Phase 1 or
-  Phase 2 collector (and vice versa) -- a bug that really did deadlock a node
-  during development.
+  Phase 2 collector, or vice versa -- the three phases share one inbox, and a
+  collector that swallowed another phase's message would deadlock the run.
 
 Message routing, hold-aside and timeouts all live in :class:`node.Node` now, so
 this adapter is a thin binding rather than a second inbox implementation.

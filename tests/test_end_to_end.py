@@ -3,12 +3,14 @@ test_end_to_end.py
 ==================
 The whole system, as four separate OS processes.
 
-This is the test that would have caught the two things a green unit suite missed
-before: that ``main.py`` had lost its entry point and did nothing at all, and
-that Phase 3 was never actually reached from the pipeline.  It runs the real
-program the way the demo runs it -- ``demo_setup.py`` then four node processes
-over real sockets -- and checks the published alert list against the counts the
-fixture generated.
+Every other test file checks one component in isolation.  This one checks that
+they compose: it runs the real program the way the demo runs it --
+``demo_setup.py``, then four node processes talking over real sockets, through
+all three phases in sequence -- and checks the published alert list against the
+counts the fixture generated.
+
+Only a test at this level can catch integration failures: a phase that is never
+reached, an entry point that does not fire, a hand-off whose two sides disagree.
 """
 
 from __future__ import annotations

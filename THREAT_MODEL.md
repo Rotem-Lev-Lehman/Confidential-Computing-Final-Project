@@ -3,6 +3,10 @@
 What this system protects, against whom, and what it deliberately does not
 protect. Read alongside [`proposal.md`](proposal.md) §3 (Project Assumptions).
 
+This is the detailed reference. For the security analysis in the context of the
+whole project — architecture, construction, and results — see
+[`report.md`](report.md).
+
 ---
 
 ## 1. The setting

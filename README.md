@@ -3,6 +3,11 @@
 Confidential Computing final project — an end-to-end **Secure Multi-Party
 Computation** system implementing [`proposal.md`](proposal.md).
 
+> **Reading this project?** Start with **[`report.md`](report.md)** — the
+> complete project report: architecture, cryptographic construction, the full
+> security analysis, and the experimental results. This README is the
+> developer-facing overview.
+
 Four independent hospital networks jointly compute which regions have **more
 than 50 COVID-19 cases**, without pooling patient data and without revealing
 anything about regions below the threshold. A region with 0 cases and a region
@@ -33,10 +38,10 @@ not on disk, not in a log.
 ```bash
 uv sync --extra dev          # install
 ./run_all.sh                 # generate a demo scenario and run all 4 nodes
-uv run pytest                # 166 tests
+uv run pytest                # 156 tests
 ```
 
-`run_all.sh` calls `demo_setup.py` on first use to generate per-node identity
+`run_all.sh` calls `src/demo_setup.py` on first use to generate per-node identity
 keys, write the matching public keys into `config.json`, and synthesize hospital
 records. Re-run with `--seed N` for a different scenario, or delete `keys/` and
 `data/` to regenerate.
@@ -132,7 +137,7 @@ src/
 
 config.json                   # public config (regions, field, node addresses)
 problems/                     # ten problem instances + expected solutions
-experiments/                  # performance harness -> report.md
+experiments/                  # measurement harness -> measurements.md
 tests/                        # 156 tests
 run_all.sh                    # launch the whole demo
 ```
@@ -246,7 +251,8 @@ uv run python experiments/run_experiments.py            # full (~3 min)
 uv run python experiments/run_experiments.py --quick    # subset (~1 min)
 ```
 
-Outputs `experiments/results.json` and `experiments/report.md`.
+Outputs `experiments/results.json` and `experiments/measurements.md`; the
+project report ([`report.md`](report.md)) cites these numbers.
 
 ---
 
