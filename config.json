@@ -1,5 +1,7 @@
 {
   "p": 1048573,
+  "max_local_count": 65536,
+  "threshold": 50,
   "vector_size": 20,
   "regions": [
     "72701",

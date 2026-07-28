@@ -1,50 +1,96 @@
 """
 secure_channel.py
 =================
-AES-GCM authenticated encryption for messages sent over the (untrusted)
+AES-256-GCM authenticated encryption for messages sent over the (untrusted)
 network, keyed by the per-session key produced by the SIGMA handshake.
 
 WHERE THIS FITS
 ---------------
-After sigma_handshake gives node A and node B a shared 32-byte session key,
-every application message between them is wrapped with encrypt_message()
-before hitting the socket and unwrapped with decrypt_message() on arrival.
-This mirrors the "Secure Communication After AKE" phase from the SGX Ex3:
-AES-GCM for confidentiality + integrity, a fresh random IV per message, and
-the ciphertext authenticated so a tampering host is detected.
+After sigma_handshake gives a directed link its own 32-byte session key, every
+application message on that link is wrapped with :func:`encrypt_message` before
+hitting the socket and unwrapped with :func:`decrypt_message` on arrival.
+
+WHAT THE AEAD BINDS
+-------------------
+Confidentiality and integrity alone are not enough on an untrusted network: an
+attacker who cannot forge a message can still *replay* one it captured, and a
+duplicate share vector silently corrupts the secure sum.  Two mechanisms stop
+that, and both are free:
+
+* **Counter nonces.**  The nonce is the message sequence number, not a random
+  value.  Each direction of each link has its own session key (initiator and
+  responder run separate handshakes), and each key starts its counter at 0, so a
+  nonce is never reused under a key -- the one thing that would break GCM.
+* **Associated data.**  Each message authenticates ``sender -> receiver # seq``
+  as associated data.  The receiver derives the same sequence number from its
+  own counter, so a replayed, reordered, reflected or cross-link message
+  authenticates against the wrong value and fails with ``InvalidTag``.
+
+Note that the sequence number is *never transmitted*: both sides derive it from
+their own counters.  An attacker therefore cannot renumber a captured message to
+make it fit.  The message's phase tag travels inside the ciphertext, so it is
+covered by the same authentication.
 
 The session key from SIGMA is 32 bytes -> AES-256-GCM.
 """
 
-import os
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+#: GCM's standard nonce width.  Also the counter width -- 96 bits of sequence
+#: number is far more than any run will ever use.
+NONCE_BYTES = 12
 
-def encrypt_message(session_key: bytes, plaintext: bytes) -> dict:
+
+class ReplayError(ValueError):
+    """Raised when a message fails to authenticate at its expected position."""
+
+
+def _nonce(seq: int) -> bytes:
+    if seq < 0 or seq >= (1 << (NONCE_BYTES * 8)):
+        raise ValueError(f"sequence number {seq} out of range")
+    return seq.to_bytes(NONCE_BYTES, "big")
+
+
+def _aad(sender: int, receiver: int, seq: int) -> bytes:
+    """Bind the message to its link and its position in the stream."""
+    return f"{sender}->{receiver}#{seq}".encode("utf-8")
+
+
+def encrypt_message(
+    session_key: bytes, plaintext: bytes, *, sender: int, receiver: int, seq: int
+) -> dict:
+    """Encrypt one message for position ``seq`` of the ``sender -> receiver`` link.
+
+    Returns a JSON-serializable ``{"ct": hex}``; the GCM tag is appended to the
+    ciphertext by the ``cryptography`` API.  Neither the nonce nor the sequence
+    number is transmitted -- the receiver derives both.
     """
-    Encrypt plaintext under the session key with AES-GCM.
+    ct = AESGCM(session_key).encrypt(
+        _nonce(seq), plaintext, _aad(sender, receiver, seq)
+    )
+    return {"ct": ct.hex()}
 
-    Returns a JSON-serializable dict {"iv": hex, "ct": hex} where ct is the
-    ciphertext with the GCM tag appended (the `cryptography` AESGCM API returns
-    ciphertext||tag together).
 
-    A fresh 12-byte (96-bit) IV is generated per call. IV reuse under the same
-    key breaks GCM, so this must never be a fixed value.
+def decrypt_message(
+    session_key: bytes, wrapped: dict, *, sender: int, receiver: int, seq: int
+) -> bytes:
+    """Decrypt a message expected at position ``seq`` of the given link.
+
+    Raises:
+        ReplayError: if the message does not authenticate at this position --
+            it was tampered with, replayed, reordered, or came from a different
+            link than it claims.
     """
-    aesgcm = AESGCM(session_key)
-    iv = os.urandom(12)  # 96-bit nonce, the GCM standard size
-    ct = aesgcm.encrypt(iv, plaintext, None)  # associated_data=None
-    return {"iv": iv.hex(), "ct": ct.hex()}
-
-
-def decrypt_message(session_key: bytes, wrapped: dict) -> bytes:
-    """
-    Decrypt a {"iv": hex, "ct": hex} dict produced by encrypt_message.
-
-    Raises cryptography.exceptions.InvalidTag if the ciphertext or tag was
-    modified in transit (the host tampered), or if the wrong key is used.
-    """
-    aesgcm = AESGCM(session_key)
-    iv = bytes.fromhex(wrapped["iv"])
-    ct = bytes.fromhex(wrapped["ct"])
-    return aesgcm.decrypt(iv, ct, None)
+    try:
+        ct = bytes.fromhex(wrapped["ct"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ReplayError(f"malformed encrypted message: {exc}") from None
+    try:
+        return AESGCM(session_key).decrypt(
+            _nonce(seq), ct, _aad(sender, receiver, seq)
+        )
+    except Exception:  # InvalidTag, and any malformed-input error
+        raise ReplayError(
+            f"message {seq} on link {sender}->{receiver} failed authentication "
+            "(tampered, replayed or out of order)"
+        ) from None

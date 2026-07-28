@@ -13,6 +13,18 @@ primitive gate types:
 it already has or decrypts an AND row — it never touches the garbler's secrets.
 
 Bits are little-endian: index 0 is the least-significant bit.
+
+MODULAR RECONSTRUCTION
+----------------------
+The secure-summation layer hands over shares from a finite field 𝔽ₚ, so ``A``
+and ``B`` reconstruct the true count only *modulo p*: as integers,
+``A + B`` is either ``T`` or ``T + p``.  Passing ``modulus=p`` inserts a
+conditional subtraction (``S ≥ p ? S − p : S``) between the adder and the
+comparator, so the circuit decides ``T > threshold`` exactly.  This is what lets
+Phase 1's additive secret sharing feed Phase 3 directly, with the
+information-theoretic hiding of the field intact — no statistical masking
+needed.  ``modulus=None`` keeps the plain, non-modular behaviour used by the
+mocked problems in ``problems/``.
 """
 
 from __future__ import annotations
@@ -101,15 +113,36 @@ class _Netlist:
 
 
 def build_threshold_circuit(
-    bit_length: int, threshold: int, region_id: int, clear_token: int
+    bit_length: int,
+    threshold: int,
+    region_id: int,
+    clear_token: int,
+    modulus: int | None = None,
 ) -> Circuit:
     """Build ``(A + B > threshold) ? region_id : clear_token`` for one region.
 
     ``A`` is the garbler's private ``bit_length``-bit share, ``B`` the
-    evaluator's.  Structure: a ripple-carry adder for ``A + B``, a comparison
-    against the public ``threshold``, then a bit-wise multiplexer choosing
-    between the public ``region_id`` and ``clear_token`` constants.
+    evaluator's.  Structure: a ripple-carry adder for ``A + B``, an optional
+    conditional subtraction of ``modulus``, a comparison against the public
+    ``threshold``, then a bit-wise multiplexer choosing between the public
+    ``region_id`` and ``clear_token`` constants.
+
+    Args:
+        bit_length: width of each party's share.
+        threshold: public quarantine threshold; a region crosses when the
+            reconstructed count is strictly greater.
+        region_id: public, non-zero id revealed when the threshold is crossed.
+        clear_token: public sentinel revealed otherwise.
+        modulus: if given, ``A`` and ``B`` are shares over 𝔽_modulus and the
+            circuit reduces ``A + B`` mod ``modulus`` before comparing.  Must be
+            at most ``2**bit_length`` so both shares fit their wires.
     """
+    if modulus is not None and not 2 <= modulus <= (1 << bit_length):
+        raise ValueError(
+            f"modulus {modulus} must be in [2, 2**bit_length] "
+            f"(bit_length={bit_length})"
+        )
+
     nl = _Netlist()
     a_bits = [nl.wire() for _ in range(bit_length)]
     b_bits = [nl.wire() for _ in range(bit_length)]
@@ -125,6 +158,15 @@ def build_threshold_circuit(
         # carry_out = (a AND b) OR (carry AND (a XOR b))
         carry = nl.or_(nl.and_(a_bits[i], b_bits[i]), nl.and_(carry, a_xor_b))
     total.append(carry)  # top sum bit
+
+    # --- reduce mod `modulus`, if the shares live in a finite field ---
+    #
+    # Both shares are < modulus, so the integer sum is < 2*modulus and a single
+    # conditional subtraction suffices:  S >= modulus  ?  S - modulus  :  S.
+    if modulus is not None:
+        over = _greater_than_const(nl, total, modulus - 1)  # 1 iff S >= modulus
+        reduced = _add_const(nl, total, (1 << len(total)) - modulus)  # S - modulus
+        total = _mux(nl, over, reduced, total)
 
     # --- total > threshold (threshold is public) ---
     crossed = _greater_than_const(nl, total, threshold)
@@ -146,6 +188,42 @@ def build_threshold_circuit(
         constant_wires=dict(nl.constants),
         output_wires=tuple(outputs),
     )
+
+
+def _add_const(nl: _Netlist, x_bits: list[int], constant: int) -> list[int]:
+    """Add a public ``constant`` to the secret number ``x_bits``, same width.
+
+    The final carry is discarded, so this is addition modulo ``2**len(x_bits)``
+    — which is exactly what makes it a *subtraction*: adding the two's
+    complement ``2**k - m`` computes ``x - m`` whenever ``x >= m``.
+
+    Because the constant's bits are public, each position needs at most one AND
+    gate (``carry AND x`` or ``carry OR x``) instead of a full adder's three.
+    """
+    out: list[int] = []
+    carry: int | None = None
+    for i, x in enumerate(x_bits):
+        c_i = (constant >> i) & 1
+        if carry is None:  # first position: no incoming carry
+            out.append(nl.not_(x) if c_i else x)
+            carry = x if c_i else nl.zero()
+            continue
+        total_bit = nl.xor(x, carry)
+        # sum = x XOR carry XOR c_i ; carry_out = majority(x, carry, c_i)
+        if c_i:
+            out.append(nl.not_(total_bit))
+            carry = nl.or_(x, carry)
+        else:
+            out.append(total_bit)
+            carry = nl.and_(x, carry)
+    return out
+
+
+def _mux(nl: _Netlist, sel: int, on_true: list[int], on_false: list[int]) -> list[int]:
+    """Bit-wise ``sel ? on_true : on_false`` — one AND gate per bit."""
+    return [
+        nl.xor(f, nl.and_(sel, nl.xor(t, f))) for t, f in zip(on_true, on_false)
+    ]
 
 
 def _greater_than_const(nl: _Netlist, x_bits: list[int], threshold: int) -> int:

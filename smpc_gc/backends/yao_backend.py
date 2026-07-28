@@ -145,6 +145,7 @@ def _region_circuit(problem: ThresholdProblem, region_id: int):
         threshold=problem.threshold,
         region_id=region_id,
         clear_token=problem.clear_token,
+        modulus=problem.modulus,
     )
 
 

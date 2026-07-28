@@ -62,7 +62,8 @@ def load_problem(path: str | Path) -> ThresholdProblem:
 
     Expected keys: ``threshold``, ``region_ids`` and any of ``a_shares``,
     ``b_shares`` (omit one for a genuine distributed party), plus optional
-    ``bit_length`` and ``clear_token``.
+    ``bit_length``, ``clear_token`` and ``modulus`` (the field the shares live
+    in, when they come from the secure-summation layer).
     """
     data = json.loads(Path(path).read_text())
     return ThresholdProblem(
@@ -72,6 +73,7 @@ def load_problem(path: str | Path) -> ThresholdProblem:
         b_shares=data.get("b_shares"),
         bit_length=data.get("bit_length", 32),
         clear_token=data.get("clear_token", 0),
+        modulus=data.get("modulus"),
     )
 
 
@@ -84,7 +86,7 @@ def merge_problems(
     agree; the merged problem holds both share vectors, which is what the
     local-simulation mode (``party=None``) and the plaintext cross-check need.
     """
-    for attr in ("threshold", "region_ids", "bit_length", "clear_token"):
+    for attr in ("threshold", "region_ids", "bit_length", "clear_token", "modulus"):
         va, vb = getattr(problem_a, attr), getattr(problem_b, attr)
         if va != vb:
             raise ValueError(
@@ -97,6 +99,7 @@ def merge_problems(
         b_shares=problem_b.b_shares if problem_b.b_shares is not None else problem_a.b_shares,
         bit_length=problem_a.bit_length,
         clear_token=problem_a.clear_token,
+        modulus=problem_a.modulus,
     )
 
 
@@ -118,4 +121,5 @@ def problem_to_dict(problem: ThresholdProblem) -> dict:
         "b_shares": problem.b_shares,
         "bit_length": problem.bit_length,
         "clear_token": problem.clear_token,
+        "modulus": problem.modulus,
     }

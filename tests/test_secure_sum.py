@@ -6,12 +6,18 @@ import pytest
 
 from secret_sharing import reconstruct, split_into_shares
 from secure_sum import (
+    SHARES_PHASE,
     compute_local_shares,
     distribute_shares,
     local_sum,
     reconstruct_global,
 )
-from vectorize import UnknownRegionError, build_region_index, vectorize
+from vectorize import (
+    CountOverflowError,
+    UnknownRegionError,
+    build_region_index,
+    vectorize,
+)
 
 P = 1048573
 NODE_IDS = [1, 2, 3, 4]
@@ -45,9 +51,18 @@ def test_vectorize_unknown_region_raises():
         vectorize(["72701", "99999"], REGIONS, P)
 
 
-def test_vectorize_reduces_mod_p():
-    """A count exceeding p must come back reduced, not raw."""
-    assert vectorize(["72701"] * (P + 5), REGIONS, P)[0] == 5
+def test_vectorize_rejects_overflow_instead_of_wrapping():
+    """A count that does not fit the field must fail loudly.
+
+    Silently reducing mod p would turn a large outbreak into a small number and
+    the region would report as clear -- the worst possible failure mode.
+    """
+    with pytest.raises(CountOverflowError):
+        vectorize(["72701"] * 11, REGIONS, P, max_local_count=10)
+
+
+def test_vectorize_accepts_counts_at_the_limit():
+    assert vectorize(["72701"] * 10, REGIONS, P, max_local_count=10)[0] == 10
 
 
 # --- secret sharing --------------------------------------------------------
@@ -93,6 +108,20 @@ def test_split_rejects_too_few_shares():
         split_into_shares(10, P, 1)
 
 
+def test_individual_share_is_independent_of_the_secret():
+    """Any proper subset of the shares is uniform -- the privacy guarantee.
+
+    Two very different secrets must produce indistinguishable share
+    distributions; here we check that both sample means land near p/2 rather
+    than near the secret.
+    """
+    n = 4000
+    low = [split_into_shares(0, P, 4)[0] for _ in range(n)]
+    high = [split_into_shares(P - 1, P, 4)[0] for _ in range(n)]
+    assert abs(sum(low) / n - P / 2) < P * 0.05
+    assert abs(sum(high) / n - P / 2) < P * 0.05
+
+
 # --- the secure sum --------------------------------------------------------
 
 
@@ -135,10 +164,13 @@ def test_compute_local_shares_gives_one_share_per_region():
 def test_distribute_shares_keeps_own_and_sends_rest():
     shares = compute_local_shares([1, 2], P, NODE_IDS)
     sent = []
-    mine = distribute_shares(1, shares, lambda pid, msg: sent.append((pid, msg)))
+    mine = distribute_shares(
+        1, shares, lambda pid, phase, payload: sent.append((pid, phase, payload))
+    )
     assert mine == shares[1]
-    assert sorted(pid for pid, _ in sent) == [2, 3, 4]
-    assert all("shares" in msg for _, msg in sent)
+    assert sorted(pid for pid, _, _ in sent) == [2, 3, 4]
+    assert all(phase == SHARES_PHASE for _, phase, _ in sent)
+    assert all("shares" in payload for _, _, payload in sent)
 
 
 def test_local_sum_rejects_mismatched_lengths():

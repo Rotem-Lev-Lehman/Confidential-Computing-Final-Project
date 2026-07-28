@@ -12,44 +12,36 @@ The GC layer (``smpc_gc.channel.Channel``) expects a point-to-point object::
     recv()    -> obj       # block until one message arrives
     close()   -> None
 
-Our :class:`node.Node` has a different shape: ``send(peer_id, obj)`` (it talks
-to three peers, not one) and a single shared ``inbox`` queue fed by every peer
-and every protocol phase.  :class:`NodeChannel` binds one peer id and presents
-the point-to-point view the GC layer wants, so ``smpc_gc``'s ``open_channel``
-can be swapped out with nothing else changing.
+Our :class:`node.Node` has a different shape: it is a mesh endpoint, so its
+``send`` names a peer and a protocol phase, and its receive side is keyed by the
+*authenticated* sender.  :class:`NodeChannel` binds one peer and presents the
+point-to-point view the GC layer wants, so ``smpc_gc``'s ``open_channel`` can be
+swapped out with nothing else changing.
 
-Everything sent through here inherits the transport's AES-GCM encryption under
-the SIGMA session key, so the Phase 3 traffic (garbled tables, OT values) is
-protected exactly like the Phase 1/2 traffic.
+WHAT THIS BUYS THE GC LAYER
+---------------------------
+Everything sent through here inherits the transport's guarantees, so Phase 3
+traffic (garbled tables, OT values) is protected exactly like Phase 1/2 traffic:
 
-TWO PROBLEMS THIS SOLVES
-------------------------
-1. **Message tagging.**  The inbox is shared across peers and phases.  A Phase 1
-   collector that sees a message it does not recognize and simply drops it will
-   silently destroy another phase's traffic -- we hit exactly this bug in a real
-   4-process run (a Phase 2 message was swallowed by the Phase 1 collector and
-   the node deadlocked).  Phase 3 traffic therefore carries its own key,
-   :data:`GC_KEY`, and anything else this channel pulls off the inbox is held
-   aside and put back rather than discarded.
+* AES-256-GCM under the SIGMA session key -- confidentiality and integrity;
+* counter nonces + associated data -- replay and reordering are rejected;
+* delivery keyed by the SIGMA-authenticated peer id, so the evaluator cannot be
+  fed a garbled circuit by anyone other than the garbler it handshook with;
+* phase tagging, so Phase 3 traffic can never be consumed by a Phase 1 or
+  Phase 2 collector (and vice versa) -- a bug that really did deadlock a node
+  during development.
 
-2. **Mid-session drop.**  ``queue.Queue.get()`` blocks forever, so if the peer
-   process dies mid-protocol the run hangs with no diagnostic.  :meth:`recv`
-   takes a timeout and raises :class:`ConnectionError` instead, matching the
-   error the GC layer's own socket channel raises when a peer disappears.
+Message routing, hold-aside and timeouts all live in :class:`node.Node` now, so
+this adapter is a thin binding rather than a second inbox implementation.
 """
 
 from __future__ import annotations
 
-import queue
+from node import TransportError
 
-#: Inbox key for Phase 3 (Garbled Circuit) traffic.  Distinct from Phase 1's
+#: Phase tag for Phase 3 (Garbled Circuit) traffic.  Distinct from Phase 1's
 #: ``"shares"`` and Phase 2's ``"reduce"`` so no phase can consume another's.
-GC_KEY = "gc"
-
-#: Seconds to wait for a message before declaring the peer gone.  Generous by
-#: default: a garbled circuit for a wide `bit_length` takes a while to build and
-#: transmit, and base OT does a modular exponentiation per input bit.
-DEFAULT_RECV_TIMEOUT = 300.0
+GC_PHASE = "gc"
 
 
 class NodeChannel:
@@ -59,61 +51,49 @@ class NodeChannel:
         node: the local :class:`node.Node` (already connected and
             SIGMA-handshaken with ``peer_id``).
         peer_id: the node id of the other party in this 2PC session.
-        recv_timeout: seconds to block in :meth:`recv` before raising.
+        recv_timeout: seconds to block in :meth:`recv` before raising; ``None``
+            uses the node's default.
     """
 
-    def __init__(self, node, peer_id: int, recv_timeout: float = DEFAULT_RECV_TIMEOUT):
+    def __init__(self, node, peer_id: int, recv_timeout: float | None = None) -> None:
         self._node = node
         self._peer_id = peer_id
         self._timeout = recv_timeout
-        # Messages pulled off the shared inbox that are not ours. Kept here and
-        # returned to the inbox on close() so no other phase loses traffic.
-        self._holdover: list = []
         self._closed = False
 
     # --- Channel protocol ---------------------------------------------------
 
     def send(self, obj) -> None:
-        """Send one message to the bound peer, wrapped so it is identifiable."""
+        """Send one message to the bound peer."""
         if self._closed:
             raise ConnectionError("channel is closed")
-        self._node.send(self._peer_id, {GC_KEY: obj, "from": self._node.node_id})
+        self._node.send(self._peer_id, GC_PHASE, obj)
 
     def recv(self):
-        """Block until a Phase 3 message arrives from the peer, and return it.
-
-        Non-GC messages are held aside (see :attr:`_holdover`), never dropped.
+        """Block until a Phase 3 message arrives from the bound peer.
 
         Raises:
-            ConnectionError: if nothing arrives within ``recv_timeout`` -- the
-                peer most likely died mid-session.
+            ConnectionError: if nothing arrives in time -- the peer most likely
+                died mid-session.  This matches the error the GC layer's own
+                socket channel raises, so the backend needs no special case.
         """
         if self._closed:
             raise ConnectionError("channel is closed")
-        while True:
-            try:
-                msg = self._node.inbox.get(timeout=self._timeout)
-            except queue.Empty:
-                raise ConnectionError(
-                    f"no message from peer {self._peer_id} within "
-                    f"{self._timeout:.0f}s; the peer appears to have died mid-session"
-                ) from None
-            if isinstance(msg, dict) and GC_KEY in msg:
-                return msg[GC_KEY]
-            self._holdover.append(msg)
+        try:
+            _sender, payload = self._node.recv(
+                GC_PHASE, timeout=self._timeout, sender=self._peer_id
+            )
+        except TransportError as exc:
+            raise ConnectionError(str(exc)) from None
+        return payload
 
     def close(self) -> None:
-        """Return any held-aside messages to the inbox and mark closed.
+        """Mark the channel closed.
 
-        The underlying socket is owned by the :class:`Node` and stays open --
-        other phases and peers may still be using it.
+        The underlying sockets are owned by the :class:`Node` and stay open --
+        other phases and peers may still be using them.
         """
-        if self._closed:
-            return
         self._closed = True
-        for msg in self._holdover:
-            self._node.inbox.put(msg)
-        self._holdover.clear()
 
     # --- context manager convenience ---------------------------------------
 
@@ -124,7 +104,7 @@ class NodeChannel:
         self.close()
 
 
-def make_channel_factory(node, peer_id: int, recv_timeout: float = DEFAULT_RECV_TIMEOUT):
+def make_channel_factory(node, peer_id: int, recv_timeout: float | None = None):
     """Build a ``ChannelFactory`` for the GC backend.
 
     ``smpc_gc``'s backends call ``channel_factory(party)`` to obtain their

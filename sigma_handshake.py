@@ -26,8 +26,14 @@ what prevents identity-misbinding attacks.
         SIG_B = Sign_B("SIGMA-responder" || g_a || g_b)
         SIG_A = Sign_A("SIGMA-initiator" || g_a || g_b)
         MAC_X = HMAC(mac_key, "id" || id_X)
-        mac_key     = KDF(g_ab, "sigma-mac-key")
-        session_key = KDF(g_ab, "sigma-session-key" || g_a || g_b)
+        mac_key     = HKDF(g_ab, info="sigma-mac-key"     || g_a || g_b)
+        session_key = HKDF(g_ab, info="sigma-session-key" || g_a || g_b)
+
+Both keys come from HKDF-SHA256 (RFC 5869) over the raw X25519 output, with the
+transcript in the ``info`` string.  Extract-then-expand is the standard way to
+turn a DH secret -- which is uniform over a curve, not over bit strings -- into
+uniform key material, and binding *both* keys to the transcript means a key from
+one session can never be mistaken for a key from another.
 
 The two signature labels differ, so a message from one direction can never be
 replayed as the other (reflection attack).
@@ -56,6 +62,8 @@ import hashlib
 from pathlib import Path
 
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
@@ -122,16 +130,26 @@ def build_transcript(g_initiator: bytes, g_responder: bytes) -> bytes:
     return g_initiator + g_responder
 
 
-def derive_mac_key(shared_secret: bytes) -> bytes:
-    """Key for the identity MACs (kept separate from the session key)."""
-    return hmac.new(shared_secret, b"sigma-mac-key", hashlib.sha256).digest()
+def _hkdf(shared_secret: bytes, info: bytes, length: int = 32) -> bytes:
+    """HKDF-SHA256 (RFC 5869) over the raw DH output.
+
+    The X25519 result is uniform over the curve, not over bit strings, so it is
+    not directly usable as a key.  Extract-then-expand is the standard fix; the
+    salt is empty because the transcript already goes into ``info``.
+    """
+    return HKDF(
+        algorithm=hashes.SHA256(), length=length, salt=None, info=info
+    ).derive(shared_secret)
+
+
+def derive_mac_key(shared_secret: bytes, transcript: bytes) -> bytes:
+    """Key for the identity MACs, separate from and bound like the session key."""
+    return _hkdf(shared_secret, b"sigma-mac-key" + transcript)
 
 
 def derive_session_key(shared_secret: bytes, transcript: bytes) -> bytes:
     """The 32-byte AES-GCM session key, bound to this handshake's transcript."""
-    return hmac.new(
-        shared_secret, b"sigma-session-key" + transcript, hashlib.sha256
-    ).digest()
+    return _hkdf(shared_secret, b"sigma-session-key" + transcript)
 
 
 def _identity_mac(mac_key: bytes, node_id: int) -> bytes:
@@ -165,7 +183,7 @@ def responder_handle_msg1(msg1: dict, my_id: int, my_signing_key):
     priv, g_b = generate_ephemeral_keypair()
     shared = compute_shared_secret(priv, g_a)
     transcript = build_transcript(g_a, g_b)
-    mac_key = derive_mac_key(shared)
+    mac_key = derive_mac_key(shared, transcript)
 
     signature = my_signing_key.sign(_signed_payload(_LABEL_RESPONDER, transcript))
     msg2 = {
@@ -207,7 +225,7 @@ def initiator_handle_msg2(
     g_b = bytes.fromhex(msg2["g"])
     shared = compute_shared_secret(state["priv"], g_b)
     transcript = build_transcript(state["g_a"], g_b)
-    mac_key = derive_mac_key(shared)
+    mac_key = derive_mac_key(shared, transcript)
 
     try:
         peer_public_key.verify(

@@ -87,6 +87,23 @@ def _deserialize_garbled(circuit: Circuit, msg: dict) -> GarbledCircuit:
     )
 
 
+def _expect(channel: Channel, message_type: str) -> dict:
+    """Receive the next message and check it is the one the protocol expects.
+
+    The two halves exchange a fixed sequence, so a message of the wrong type
+    means the parties have desynchronized (or something is on the wire that
+    should not be).  Failing here beats reading a missing key as ``None`` and
+    producing a silently wrong result.
+    """
+    msg = channel.recv()
+    if not isinstance(msg, dict) or msg.get("type") != message_type:
+        got = msg.get("type") if isinstance(msg, dict) else type(msg).__name__
+        raise ValueError(
+            f"protocol desynchronized: expected a {message_type!r} message, got {got!r}"
+        )
+    return msg
+
+
 def _serialize_ciphertexts(cts: list[tuple[bytes, bytes]]) -> list[list[str]]:
     return [[c0.hex(), c1.hex()] for c0, c1 in cts]
 
@@ -125,13 +142,13 @@ def run_garbler(
 
     sender = OTSender(group)
     channel.send({"type": "ot_pubkey", "A": sender.public_key()})  # msg 2
-    B_values = channel.recv()["B"]  # msg 3
+    B_values = _expect(channel, "ot_choice")["B"]  # msg 3
     ciphertexts = sender.respond(B_values, ot_messages)
     channel.send(  # msg 4
         {"type": "ot_ciphertexts", "ct": _serialize_ciphertexts(ciphertexts)}
     )
 
-    return channel.recv()["output"]  # msg 5 (evaluator broadcasts the result)
+    return _expect(channel, "output")["output"]  # msg 5 (evaluator broadcasts)
 
 
 def run_evaluator(
@@ -145,17 +162,19 @@ def run_evaluator(
     Holds only the evaluator's bits (B); fetches its input-wire labels by OT so
     those bits stay private.  Returns the public output bits (little-endian).
     """
-    garbled = _deserialize_garbled(circuit, channel.recv())  # msg 1
+    garbled = _deserialize_garbled(circuit, _expect(channel, "garbled"))  # msg 1
     ev_wires = circuit.evaluator_input_wires
 
-    A = channel.recv()["A"]  # msg 2
+    A = _expect(channel, "ot_pubkey")["A"]  # msg 2
     receiver = OTReceiver(A, group)
     ot_choices = [evaluator_bits[w] for w in ev_wires]
     B_values = receiver.choose(ot_choices)
     channel.send({"type": "ot_choice", "B": B_values})  # msg 3
 
-    ciphertexts = _deserialize_ciphertexts(channel.recv()["ct"])  # msg 4
-    chosen_labels = receiver.finalize(ciphertexts)
+    ciphertexts = _deserialize_ciphertexts(_expect(channel, "ot_ciphertexts")["ct"])  # msg 4
+    # Every OT message is exactly one wire label; say so, so a truncated
+    # ciphertext is an error rather than a short label.
+    chosen_labels = receiver.finalize(ciphertexts, expected_len=LABEL_BYTES)
     evaluator_input_labels = {
         w: _bytes_to_label(chosen_labels[i]) for i, w in enumerate(ev_wires)
     }

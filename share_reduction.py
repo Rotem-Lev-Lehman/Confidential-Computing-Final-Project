@@ -3,222 +3,164 @@ share_reduction.py
 ==================
 Phase 2: reduce the 4-node network to the 2 parties the Garbled Circuit needs.
 
-WHY THIS EXISTS
+WHERE THIS FITS
 ---------------
-Phase 3 (Yao's Garbled Circuit) is a *two-party* protocol: Node 1 (Garbler)
-holds ``A``, Node 2 (Evaluator) holds ``B``, and the circuit checks
-``A + B > threshold``.  The circuit adds ``A`` and ``B`` as plain integers.
+Phase 1 leaves every node holding one additive share, over 𝔽ₚ, of the Global
+Region Vector.  Phase 3 (Yao's Garbled Circuit) is a *two-party* protocol.  This
+module is the bridge the proposal calls "Protocol Switching & Share Migration":
 
-Phase 1's secure sum works modulo ``p``.  Naively handing the GC engine two
-consolidated mod-p shares does NOT work: if ``s_i`` are the four mod-p shares of
-the true count ``T``, then
+    Nodes 3 and 4 mathematically mask and send their algebraic shares to
+    Nodes 1 and 2.  This leaves Node 1 holding a single consolidated value (A)
+    and Node 2 holding a single consolidated value (B), such that
+    A + B = True Regional Case Count (mod p).
 
-    A = (s1 + s3) mod p,   B = (s2 + s4) mod p
-    =>  A + B == T   OR   A + B == T + p     (as integers)
+That is exactly what :func:`run_share_reduction` does, and it consumes Phase 1's
+output rather than re-deriving anything from the raw local vectors.
 
-and in practice it is almost always ``T + p`` (measured: 100% of random trials),
-which silently flips the threshold result.  Resolving *which* case holds would
-itself require a secure comparison — exactly the thing the GC is there to do.
+WHY THE SHARES ARE ALREADY MASKED
+---------------------------------
+A Phase 1 share ``G_i`` is uniform over 𝔽ₚ on its own -- that is the whole point
+of additive secret sharing -- so node 3 does not need to add anything before
+sending ``G_3`` to node 1.  Node 1 learns a uniformly random field element and
+nothing else; the masking the proposal asks for is already inherent in the
+share.  Consolidation is then a single modular addition:
 
-THE FIX IMPLEMENTED HERE (option "b" agreed with the GC layer's author)
------------------------------------------------------------------------
-Phase 2 does a fresh **2-party additive re-sharing over the integers**, so
-reconstruction is exact and the GC circuit needs no modular reduction at all.
-
-For each region, every node ``i`` splits its own local count ``v_i`` into
-
-    a_i = uniform random in [0, M)          -> sent to Node 1
-    b_i = v_i - a_i + M                     -> sent to Node 2
-
-Both parts are non-negative (``a_i < M``, so ``b_i >= v_i > -1``), and summing
-over all ``n`` nodes gives
-
-    A + B = sum(v_i) + n*M = T + n*M
-
-i.e. an *exact* integer reconstruction, offset by the public constant ``n*M``.
-
-THE OFFSET IS FREE
-------------------
-The GC circuit takes ``threshold`` as a **public** parameter, so we simply hand
-it ``threshold + n*M``:
-
-    (A + B) > (threshold + n*M)   <=>   T > threshold
-
-The circuit source is untouched — only a public number changes.
+    A = (G_1 + G_3) mod p        (held by Node 1, the Garbler,   party 0)
+    B = (G_2 + G_4) mod p        (held by Node 2, the Evaluator, party 1)
+    A + B ≡ T  (mod p)
 
 PRIVACY
 -------
-* Node 1 sees only the ``a_i`` values, each drawn uniformly from ``[0, M)``
-  independently of ``v_i`` — they carry zero information about the counts.
-* Node 2 sees only ``b_i = v_i - a_i + M``, uniform over ``(v_i, v_i + M]``.
-  Its statistical distance from uniform over ``(0, M]`` is ``v_i / M``; with the
-  default ``MASK_BITS = 40`` and realistic counts (< 2^16) that is about 2^-24.
-  This is *statistical* hiding rather than the information-theoretic hiding of
-  Phase 1's mod-p sharing — the standard, documented trade for exact integer
-  reconstruction.  Raise ``mask_bits`` to shrink it further.
-* Neither party alone can reconstruct ``T``; only ``A + B`` reveals it, and that
-  sum is never formed outside the garbled circuit.
+Information-theoretic, inherited unchanged from Phase 1.  Each of ``A`` and
+``B`` is uniform over 𝔽ₚ taken alone, so neither party learns anything about the
+counts; only their sum carries information, and that sum is never formed outside
+the garbled circuit.  This is strictly stronger than a statistical masking
+scheme, and it is available precisely because the reduction stays in the field.
 
-RELATIONSHIP TO PHASE 1
------------------------
-Phase 1's mod-p secure sum is still run and still meaningful: it is the 4-party
-additive-secret-sharing deliverable, and :func:`verify_against_phase1` uses its
-result to cross-check this phase.  Phase 2 re-shares from the local vectors
-because, as shown above, exact integer shares cannot be derived from mod-p
-shares without a secure comparison.
+See ``THREAT_MODEL.md`` §3 for the full statement of what this phase hides.
+
+THE MODULAR RECONSTRUCTION, AND WHERE IT IS RESOLVED
+----------------------------------------------------
+Because the field wraps, ``A + B`` over the *integers* is either ``T`` or
+``T + p``:
+
+    A, B ∈ [0, p)  =>  A + B ∈ [0, 2p)  and  A + B ≡ T (mod p)
+
+Deciding which case holds is itself a comparison on secret data, so it cannot be
+done in the clear here.  It is done *inside* the garbled circuit instead: the
+circuit takes ``modulus=p`` as a public parameter and performs one conditional
+subtraction (``S >= p ? S - p : S``) between its adder and its comparator.  See
+:func:`smpc_gc.yao.circuit.build_threshold_circuit`.
+
+The cost is small and is repaid immediately: the shares are ``p.bit_length()``
+bits wide (20 for the configured p) instead of the 47 an integer-masking scheme
+would need, and base OT cost is linear in that width.
 """
 
 from __future__ import annotations
-
-import secrets
-
-#: Bits of randomness masking each local count.  The per-share statistical
-#: leakage is about ``max_count / 2**MASK_BITS``.
-MASK_BITS = 40
 
 #: Node ids of the two parties the Garbled Circuit runs between.
 GARBLER_ID = 1  # holds A (party 0)
 EVALUATOR_ID = 2  # holds B (party 1)
 
-
-def offset(num_nodes: int, mask_bits: int = MASK_BITS) -> int:
-    """The public constant by which ``A + B`` exceeds the true count."""
-    return num_nodes * (1 << mask_bits)
-
-
-def shifted_threshold(threshold: int, num_nodes: int, mask_bits: int = MASK_BITS) -> int:
-    """Public threshold to hand the GC engine, accounting for the offset."""
-    return threshold + offset(num_nodes, mask_bits)
+#: Message phase tag for Phase 2 traffic, kept distinct from Phase 1's so the
+#: two phases can never consume each other's messages from the shared inbox.
+REDUCE_PHASE = "reduce"
 
 
-def required_bit_length(num_nodes: int, mask_bits: int = MASK_BITS, headroom: int = 4) -> int:
-    """Smallest safe ``bit_length`` for the GC circuit given the offset."""
-    return (num_nodes << mask_bits).bit_length() + headroom
+def target_party(node_id: int, node_ids: list[int]) -> int:
+    """Which of the two parties a node contributes its Phase 1 share to.
 
-
-def split_for_two(value: int, mask_bits: int = MASK_BITS) -> tuple[int, int]:
-    """Split one non-negative ``value`` into two non-negative integer shares.
-
-    Returns ``(a, b)`` with ``a + b == value + 2**mask_bits``.  ``a`` is uniform
-    in ``[0, 2**mask_bits)`` and independent of ``value``; ``b`` absorbs the
-    remainder plus the mask so it stays non-negative.
-
-    Uses :mod:`secrets` (CSPRNG), not :mod:`random`: these shares are the
-    privacy guarantee, and a predictable PRNG would let a party recover the
-    other's inputs.
+    Nodes 1 and 2 keep their own share.  The remaining nodes are dealt
+    alternately to the Garbler and the Evaluator, so the two parties stay
+    balanced for any node count (with the proposal's four nodes this is
+    exactly "node 3 -> node 1, node 4 -> node 2").
     """
-    if value < 0:
-        raise ValueError(f"cannot split negative value {value}")
-    M = 1 << mask_bits
-    a = secrets.randbelow(M)
-    b = value - a + M
-    return a, b
+    if node_id in (GARBLER_ID, EVALUATOR_ID):
+        return node_id
+    extras = [n for n in sorted(node_ids) if n not in (GARBLER_ID, EVALUATOR_ID)]
+    return GARBLER_ID if extras.index(node_id) % 2 == 0 else EVALUATOR_ID
 
 
-def split_vector_for_two(
-    V: list[int], mask_bits: int = MASK_BITS
-) -> tuple[list[int], list[int]]:
-    """Apply :func:`split_for_two` element-wise to a whole region vector."""
-    pairs = [split_for_two(v, mask_bits) for v in V]
-    a_vec = [a for a, _ in pairs]
-    b_vec = [b for _, b in pairs]
-    return a_vec, b_vec
+def expected_contributors(party_id: int, node_ids: list[int]) -> list[int]:
+    """The node ids whose shares ``party_id`` must receive (excluding itself)."""
+    return [
+        n for n in sorted(node_ids)
+        if n != party_id and target_party(n, node_ids) == party_id
+    ]
 
 
-def add_vectors(vectors: list[list[int]]) -> list[int]:
-    """Element-wise integer sum of equal-length vectors (no modulus)."""
-    if not vectors:
-        raise ValueError("add_vectors got no vectors")
-    M = len(vectors[0])
-    if not all(len(v) == M for v in vectors):
+def consolidate(share_vectors: list[list[int]], p: int) -> list[int]:
+    """Element-wise modular sum of the share vectors one party ends up holding.
+
+    Raises:
+        ValueError: on empty input or mismatched lengths, which would mean a
+            message was dropped or duplicated upstream.
+    """
+    if not share_vectors:
+        raise ValueError("consolidate got no share vectors")
+    width = len(share_vectors[0])
+    if not all(len(v) == width for v in share_vectors):
         raise ValueError(
-            "vectors have mismatched lengths -- a message was dropped or duplicated"
+            "share vectors have mismatched lengths -- "
+            "a message was dropped or duplicated upstream"
         )
-    return [sum(vec[j] for vec in vectors) for j in range(M)]
+    return [
+        sum(vec[j] for vec in share_vectors) % p for j in range(width)
+    ]
+
+
+def required_bit_length(p: int) -> int:
+    """Share width the GC circuit needs for shares reduced mod ``p``."""
+    return p.bit_length()
 
 
 # ---------------------------------------------------------------------------
 # Networked protocol
 # ---------------------------------------------------------------------------
 
-#: Message key for Phase 2 traffic, kept distinct from Phase 1's ``"shares"``
-#: so the two phases never consume each other's messages from the shared inbox.
-REDUCE_KEY = "reduce"
-
-
-def collect_tagged(inbox, key: str, num_expected: int) -> list:
-    """Pull ``num_expected`` messages carrying ``key`` from the inbox.
-
-    Messages that do not carry ``key`` (e.g. a fast peer's Phase 2 message
-    arriving while we are still finishing Phase 1) are held aside and put back
-    afterwards, so no message is ever lost between phases.
-    """
-    collected: list = []
-    holdover: list = []
-    while len(collected) < num_expected:
-        msg = inbox.get()
-        if isinstance(msg, dict) and key in msg:
-            collected.append(msg[key])
-        else:
-            holdover.append(msg)
-    for msg in holdover:
-        inbox.put(msg)
-    return collected
-
 
 def run_share_reduction(
     node_id: int,
     node,
-    V: list[int],
+    phase1_share: list[int],
     node_ids: list[int],
-    mask_bits: int = MASK_BITS,
+    p: int,
+    timeout: float | None = None,
 ) -> list[int] | None:
-    """Run Phase 2 for this node.
-
-    Every node splits its local vector and sends one half to the Garbler and the
-    other to the Evaluator.  Nodes 1 and 2 additionally collect and sum what
-    they receive.
+    """Run Phase 2 for this node, consuming its Phase 1 output.
 
     Args:
         node_id: this node's id.
-        node: the transport (needs ``.send(peer_id, dict)`` and ``.inbox``).
-        V: this node's local region vector (non-negative counts).
+        node: the transport (needs ``.send(peer_id, phase, payload)`` and
+            ``.collect(phase, senders, timeout)``).
+        phase1_share: this node's share of the Global Region Vector from Phase 1.
         node_ids: all participating node ids.
-        mask_bits: masking strength (see :data:`MASK_BITS`).
+        p: the public prime modulus.
+        timeout: seconds to wait for each expected peer.
 
     Returns:
-        ``A`` on the Garbler, ``B`` on the Evaluator, ``None`` on other nodes
-        (they only contribute and then drop out of the protocol).
+        ``A`` on the Garbler, ``B`` on the Evaluator, ``None`` on every other
+        node -- they contribute their share and then drop out of the protocol.
     """
-    a_vec, b_vec = split_vector_for_two(V, mask_bits)
-
-    # Send each half to its destination; keep our own half locally.
-    own_parts: list[list[int]] = []
-    for target, vec in ((GARBLER_ID, a_vec), (EVALUATOR_ID, b_vec)):
-        if target == node_id:
-            own_parts.append(vec)
-        else:
-            node.send(target, {REDUCE_KEY: vec, "from": node_id})
-
-    if node_id not in (GARBLER_ID, EVALUATOR_ID):
+    destination = target_party(node_id, node_ids)
+    if destination != node_id:
+        node.send(destination, REDUCE_PHASE, {"share": list(phase1_share)})
         return None
 
-    # Nodes 1 and 2 gather one vector from every *other* node.
-    received = collect_tagged(node.inbox, REDUCE_KEY, num_expected=len(node_ids) - 1)
-    return add_vectors(own_parts + received)
+    contributors = expected_contributors(node_id, node_ids)
+    received = node.collect(REDUCE_PHASE, contributors, timeout=timeout)
+    return consolidate(
+        [phase1_share] + [received[peer]["share"] for peer in contributors], p
+    )
 
 
 def verify_against_phase1(
-    A: list[int], B: list[int], phase1_global: list[int], p: int, num_nodes: int,
-    mask_bits: int = MASK_BITS,
+    A: list[int], B: list[int], phase1_global: list[int], p: int
 ) -> bool:
-    """Cross-check Phase 2 against Phase 1's mod-p result.
+    """Cross-check that ``A + B`` reconstructs Phase 1's global vector mod ``p``.
 
-    ``A + B - offset`` should equal Phase 1's reconstructed global vector
-    (mod ``p``).  Only usable in tests/simulation, where both are available —
-    in the real protocol no single party holds both ``A`` and ``B``.
+    Only usable in tests/simulation, where both consolidated vectors are
+    available -- in the real protocol no single party holds both.
     """
-    off = offset(num_nodes, mask_bits)
-    return all(
-        (a + b - off) % p == g for a, b, g in zip(A, B, phase1_global)
-    )
+    return all((a + b) % p == g for a, b, g in zip(A, B, phase1_global))

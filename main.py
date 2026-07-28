@@ -1,40 +1,66 @@
 """
-Per-node entry point for the Secure COVID-19 Alert System (Phase 1: Secure Sum).
+main.py
+=======
+Per-node entry point for the Secure COVID-19 Regional Quarantine Alert System.
 
-Each of the 4 hospital nodes runs this file as its own process:
+Each of the hospital nodes runs this file as its own process::
 
-    python main.py --node-id 1 --records data/hospital1.txt
-    python main.py --node-id 2 --records data/hospital2.txt
+    uv run python main.py --node-id 1 --records data/hospital1.txt
+    uv run python main.py --node-id 2 --records data/hospital2.txt
     ...
 
-Each node authenticates with its OWN Ed25519 identity key, read from
-keys/node<N>.key (never committed). The matching public keys live in
-config.json. There is no shared secret.
+or all of them at once with ``./run_all.sh``.
 
-Flow per node:
-  1. load config (public: p, regions, node addresses)
-  2. build a Node with this node's private identity key
-  3. start listening, then SIGMA-handshake-connect to every peer
-  4. read local records -> vectorize into V
-  5. run the secure sum -> this node's share of the Global Region Vector
-  6. print the local result (Phase 2/3 will consume the shares later)
+Each node authenticates with its OWN Ed25519 identity key, read from
+``keys/node<N>.key`` (never committed).  The matching public keys live in
+``config.json``.  There is no shared secret anywhere in the system.
+
+THE THREE PHASES, END TO END
+----------------------------
+Phase 1 -- Secure Sum (all nodes).  Each node vectorizes its local records into
+    a histogram over the public region list, additively secret-shares every
+    element over 𝔽ₚ, and locally sums the shares it receives.  Each node ends up
+    holding one share of the Global Region Vector; nobody holds the vector.
+
+Phase 2 -- Share Migration (all nodes).  The extra nodes send their Phase 1
+    shares to the two parties the garbled circuit runs between, which
+    consolidate them into A (Node 1, Garbler) and B (Node 2, Evaluator) with
+    A + B ≡ true count (mod p).
+
+Phase 3 -- Garbled Circuit (nodes 1 and 2).  The two parties run Yao's 2PC over
+    the same SIGMA-encrypted link they already share, evaluating for each region
+
+        (A + B mod p) > threshold ? region_id : "Clear"
+
+    Node 2 broadcasts the resulting quarantine alert list.  Sub-threshold
+    regions reveal only "Clear" -- never their count.
+
+DEMO NOTE
+---------
+Run locally, all nodes print to one console, so the transcript shows more than
+any single hospital would see in production (where the four nodes run on four
+machines under four organizations).  That is deliberate -- it is how the
+protocol is demonstrated.  See THREAT_MODEL.md.
 """
 
+from __future__ import annotations
+
+import argparse
 import sys
 import time
-import argparse
 from pathlib import Path
 
-from config_loader import load_config
+from config_loader import CONFIG_PATH, Config, load_config
+from gc_channel import make_channel_factory
+from gc_handoff import build_problem, region_ids_from_config, write_problem
+from node import Node
+from secure_sum import run_secure_sum
+from share_reduction import EVALUATOR_ID, GARBLER_ID, run_share_reduction
 from sigma_handshake import load_signing_key
 from vectorize import vectorize
-from secure_sum import run_secure_sum
-from share_reduction import GARBLER_ID, EVALUATOR_ID, run_share_reduction
-from gc_handoff import region_ids_from_config, write_problem
-from node import Node
 
 
-def config_to_node_dict(config) -> dict[int, dict]:
+def config_to_node_dict(config: Config) -> dict[int, dict]:
     """
     Bridge the config_loader dataclass to the plain dict shape node.py expects.
 
@@ -61,88 +87,193 @@ def load_identity_key(node_id: int, key_path: str | None):
     """Load this node's PRIVATE Ed25519 signing key.
 
     Each node has its own key -- there is no shared secret. Generate them with
-    keygen.py; the matching public keys live in config.json.
+    demo_setup.py (or keygen.py); the matching public keys live in config.json.
     """
     path = Path(key_path) if key_path else Path("keys") / f"node{node_id}.key"
     if not path.exists():
         print(
             f"ERROR: signing key not found at {path}\n"
-            "Generate the identity keys first:\n"
-            "  python3 keygen.py\n"
-            "then paste the printed public keys into config.json.",
+            "Generate the identity keys and matching config first:\n"
+            "  uv run python demo_setup.py",
             file=sys.stderr,
         )
         sys.exit(1)
     return load_signing_key(path)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Secure Sum hospital node")
-    parser.add_argument("--node-id", type=int, required=True, help="this node's id (1..4)")
+def make_backend(name: str, node: Node, peer_id: int, args, config: Config):
+    """Instantiate the 2PC engine for Phase 3.
+
+    ``yao`` is wired to run over *our* encrypted transport: it gets a
+    ``channel_factory`` and never learns it is talking over SIGMA + AES-GCM
+    instead of its own socket stub.  This is the swap point the whole design is
+    built around.
+
+    ``mpyc`` cannot be wired that way -- the framework brings its own networking
+    and its own (TLS-less) transport, and there is no hook to substitute ours.
+    It therefore opens a second, separate connection on its own port pair.  That
+    is an honest limitation of running someone else's framework, and a reason
+    the from-scratch engine is the primary deliverable; see THREAT_MODEL.md.
+    """
+    if name == "yao":
+        from smpc_gc.backends.yao_backend import YaoBackend
+        from smpc_gc.yao.ot import GROUPS
+
+        return YaoBackend(
+            group=GROUPS[args.ot_group],
+            channel_factory=make_channel_factory(node, peer_id),
+        )
+
+    from smpc_gc.backends.mpyc_backend import MPyCBackend
+
+    # Both parties must derive the same rendezvous, so derive it from the
+    # public config rather than from a flag either side could set differently.
+    garbler = config.nodes[GARBLER_ID]
+    return MPyCBackend(host=garbler.host, port=args.mpyc_port)
+
+
+def print_alerts(results, regions: list[str], region_ids: list[int], threshold: int) -> None:
+    """Print the public output: the quarantine alert list.
+
+    Sub-threshold regions appear as 'Clear'.  That is the entire public result
+    -- their case counts never leave the circuit.
+    """
+    id_to_label = dict(zip(region_ids, regions))
+    print()
+    print("=" * 58)
+    print(f"  QUARANTINE ALERT  (threshold: more than {threshold} cases)")
+    print("=" * 58)
+    for r in results:
+        label = id_to_label.get(r.region_id, str(r.region_id))
+        marker = "QUARANTINE" if r.crossed else "clear"
+        print(f"  region {label:>8} (id {r.region_id})  ->  {marker}")
+    crossed = [id_to_label.get(r.region_id, r.region_id) for r in results if r.crossed]
+    print("-" * 58)
+    if crossed:
+        print(f"  {len(crossed)} region(s) must be locked down: {', '.join(map(str, crossed))}")
+    else:
+        print("  No region crossed the threshold.")
+    print("=" * 58)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Secure quarantine-alert hospital node")
+    parser.add_argument("--node-id", type=int, required=True, help="this node's id (1..N)")
     parser.add_argument("--records", type=str, required=True, help="path to local records file")
+    parser.add_argument("--config", type=str, default=str(CONFIG_PATH),
+                        help="path to the public config file")
     parser.add_argument("--key", type=str, default=None,
                         help="path to this node's private signing key "
                              "(default: keys/node<ID>.key)")
     parser.add_argument("--connect-delay", type=float, default=1.0,
                         help="seconds to wait for peers' listeners before connecting")
-    parser.add_argument("--threshold", type=int, default=50,
-                        help="quarantine threshold (a region crosses when count > threshold)")
-    parser.add_argument("--gc-out", type=str, default="gc_input",
-                        help="directory for the Garbled Circuit problem file (nodes 1 and 2)")
-    args = parser.parse_args()
+    parser.add_argument("--threshold", type=int, default=None,
+                        help="quarantine threshold (default: the config's)")
+    parser.add_argument("--backend", default="yao", choices=("yao", "mpyc"),
+                        help="2PC engine for Phase 3 (default: yao, from scratch)")
+    parser.add_argument("--ot-group", choices=("1024", "2048"), default="2048",
+                        help="MODP group for the Oblivious Transfer (yao only)")
+    parser.add_argument("--mpyc-port", type=int, default=9100,
+                        help="rendezvous port for the mpyc backend, which brings "
+                             "its own transport (uses this port and port+1)")
+    parser.add_argument("--show-shares", action="store_true",
+                        help="DEMO ONLY: print this node's raw share of the global "
+                             "vector. Individually meaningless (a share is uniform "
+                             "noise), but all nodes' shares together reconstruct "
+                             "the true counts -- so only do this on a single-machine "
+                             "demo. See THREAT_MODEL.md")
+    parser.add_argument("--gc-out", type=str, default=None,
+                        help="DEMO ONLY: also dump this party's Phase 2 share vector "
+                             "to a JSON file. The two parties' files together "
+                             "reconstruct every region's exact count -- see "
+                             "THREAT_MODEL.md")
+    return parser
 
-    config = load_config()
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+
+    config = load_config(args.config)
     p = config.p
     regions = config.regions
-    node_ids = sorted(config.nodes.keys())
-    num_nodes = len(node_ids)
-    signing_key = load_identity_key(args.node_id, args.key)
+    node_ids = config.node_ids
+    threshold = config.threshold if args.threshold is None else args.threshold
+    me = args.node_id
 
-    if args.node_id not in node_ids:
-        print(f"ERROR: node-id {args.node_id} not in config nodes {node_ids}", file=sys.stderr)
-        sys.exit(1)
+    if me not in node_ids:
+        print(f"ERROR: node-id {me} not in config nodes {node_ids}", file=sys.stderr)
+        return 1
 
-    # 1-2. build the node
-    node = Node(args.node_id, config_to_node_dict(config), signing_key, num_nodes)
+    signing_key = load_identity_key(me, args.key)
+    node = Node(me, config_to_node_dict(config), signing_key, len(node_ids))
 
-    # 3. start listening, give peers a moment to come up, then connect to all
-    node.start_listener()
-    print(f"[node {args.node_id}] listening on {node.host}:{node.port}")
-    time.sleep(args.connect_delay)
+    try:
+        # --- connect the mesh -------------------------------------------------
+        node.start_listener()
+        print(f"[node {me}] listening on {node.host}:{node.port}")
+        time.sleep(args.connect_delay)
+        for peer_id in sorted(node.peers):
+            node.connect_to_peer(peer_id)
+        print(f"[node {me}] SIGMA handshake done with all {len(node.peers)} peers")
 
-    for peer_id in sorted(node.peers):
-        node.connect_to_peer(peer_id)
-    print(f"[node {args.node_id}] connected + SIGMA handshake done with all peers")
+        # --- Phase 1: vectorize, secret-share, sum ---------------------------
+        records = load_records(args.records)
+        V = vectorize(records, regions, p, config.max_local_count)
+        print(f"[node {me}] vectorized {len(records)} records into {len(V)} regions")
 
-    # 4. read local records and vectorize
-    records = load_records(args.records)
-    V = vectorize(records, regions, p)
-    print(f"[node {args.node_id}] local vector (len {len(V)}) computed from {len(records)} records")
+        phase1_share = run_secure_sum(me, node, V, p, node_ids)
+        print(f"[node {me}] Phase 1 done: holding one share of the global vector")
+        if args.show_shares:
+            # Uniform over F_p and independent of the counts -- this is what
+            # "the node learns nothing" looks like in practice.
+            print(f"[node {me}] (demo) my share of the global vector: {phase1_share}")
 
-    # 5. run the secure sum
-    local_result = run_secure_sum(args.node_id, node, V, p, node_ids)
+        # --- Phase 2: migrate the shares to the two 2PC parties --------------
+        consolidated = run_share_reduction(me, node, phase1_share, node_ids, p)
+        if consolidated is None:
+            print(f"[node {me}] Phase 2 done: contributed my share; leaving the protocol")
+            return 0
 
-    # 6. output this node's share of the Global Region Vector
-    print(f"[node {args.node_id}] local share of global vector: {local_result}")
+        party = 0 if me == GARBLER_ID else 1
+        role = "Garbler (A)" if party == 0 else "Evaluator (B)"
+        peer_id = EVALUATOR_ID if party == 0 else GARBLER_ID
+        print(f"[node {me}] Phase 2 done: party {party}, {role}")
 
-    # 7. Phase 2: reduce the 4 nodes to the 2 parties the Garbled Circuit needs.
-    #    Every node contributes; only nodes 1 and 2 end up holding a vector.
-    reduced = run_share_reduction(args.node_id, node, V, node_ids)
-    if reduced is None:
-        print(f"[node {args.node_id}] contributed to share reduction; done")
-        return
+        # --- Phase 3: the garbled circuit ------------------------------------
+        region_ids = region_ids_from_config(regions)
+        problem = build_problem(
+            party=party,
+            shares=consolidated,
+            region_ids=region_ids,
+            threshold=threshold,
+            p=p,
+        )
+        if args.gc_out:
+            out = write_problem(Path(args.gc_out) / f"node{me}" / f"problem_{'AB'[party]}.json", problem)
+            print(f"[node {me}] WARNING (demo): wrote my share vector to {out}")
 
-    # 8. Write the problem file for the GC layer.  Node 1 is the Garbler
-    #    (party 0, holds A); Node 2 is the Evaluator (party 1, holds B).
-    party = 0 if args.node_id == GARBLER_ID else 1
-    letter = "A" if party == 0 else "B"
-    out_path = f"{args.gc_out}/problem_{letter}.json"
-    write_problem(
-        out_path,
-        party=party,
-        shares=reduced,
-        region_ids=region_ids_from_config(regions),
-        threshold=args.threshold,
-        num_nodes=num_nodes,
-    )
-    print(f"[node {args.node_id}] party {party} holds {letter}; wrote {out_path}")
+        backend = make_backend(args.backend, node, peer_id, args, config)
+        transport = (
+            "our SIGMA-encrypted link"
+            if args.backend == "yao"
+            else f"mpyc's own transport on port {args.mpyc_port}"
+        )
+        print(
+            f"[node {me}] Phase 3: running {backend.name} 2PC with node {peer_id} "
+            f"over {transport} ({len(region_ids)} regions, "
+            f"{problem.bit_length}-bit shares)..."
+        )
+        results = backend.evaluate(problem, party=party)
+        print(f"[node {me}] Phase 3 done")
+
+        if me == EVALUATOR_ID:
+            # The proposal's Phase 3 step 3: Node 2 collects the active hot spot
+            # ids and broadcasts the quarantine alert list.
+            print_alerts(results, regions, region_ids, threshold)
+        return 0
+    finally:
+        node.close()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

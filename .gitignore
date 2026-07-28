@@ -8,3 +8,23 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# ---------------------------------------------------------------------------
+# SECRETS -- never commit these.
+# ---------------------------------------------------------------------------
+# Per-node Ed25519 identity keys written by keygen.py.  Committing one lets
+# anyone impersonate that hospital node in the SIGMA handshake.
+keys/
+*.key
+
+# Per-party share vectors written by the (optional) --gc-out debug dump.
+# A + B reconstructs every region's exact case count, including sub-threshold
+# regions the protocol is meant to hide.  See THREAT_MODEL.md.
+gc_input/
+
+# Generated demo records (synthetic, but they stand in for patient data).
+data/

@@ -139,7 +139,7 @@ class MPyCBackend(ThresholdBackend):
         captured: dict[str, list[int]] = {}
 
         async def _protocol() -> None:
-            secint = mpc.SecInt(problem.bit_length)
+            secint = mpc.SecInt(_secint_bits(problem))
             await mpc.start()
             try:
                 num_parties = len(mpc.parties)
@@ -163,6 +163,13 @@ class MPyCBackend(ThresholdBackend):
                         b = mpc.input(secint(b_val), senders=0)
 
                     total = a + b
+                    if problem.modulus is not None:
+                        # Shares live in F_modulus, so a + b is the true count
+                        # or the true count + modulus.  One conditional
+                        # subtraction reduces it, mirroring the garbled
+                        # circuit's `S >= p ? S - p : S`.
+                        over = total >= problem.modulus
+                        total = total - problem.modulus * over
                     crossed = total > problem.threshold
                     secure_outputs.append(
                         mpc.if_else(crossed, region_id, problem.clear_token)
@@ -185,6 +192,26 @@ class MPyCBackend(ThresholdBackend):
             )
             for j, region_id in enumerate(problem.region_ids)
         ]
+
+
+def _secint_bits(problem: ThresholdProblem) -> int:
+    """Width of the MPyC secure integer, sized so nothing silently overflows.
+
+    ``mpc.SecInt(l)`` is *signed*, so it represents ``[-2**(l-1), 2**(l-1))``.
+    Every intermediate has to fit:
+
+    * ``A + B`` — two ``bit_length``-bit shares, so up to ``2**(bit_length+1)``;
+      with the sign bit that needs ``bit_length + 2``, and one more bit of
+      headroom keeps the comparisons well away from the boundary;
+    * the revealed ``region_id`` / ``clear_token`` carried through
+      ``mpc.if_else``.
+
+    Sizing this explicitly matters most on the modular path, where the shares
+    are near-uniform in ``[0, modulus)`` rather than small case counts, so an
+    under-sized field would wrap and flip the comparison.
+    """
+    ids = list(problem.region_ids) + [problem.clear_token]
+    return max(problem.bit_length + 3, max(v.bit_length() for v in ids) + 2)
 
 
 def _local_value(shares: list[int] | None, index: int) -> int | None:

@@ -85,6 +85,23 @@ class DHGroup:
     def inv(self, x: int) -> int:
         return pow(x, -1, self.p)
 
+    def check_element(self, x: int, name: str) -> int:
+        """Reject anything that is not a real element of the order-q subgroup.
+
+        Both sides validate what they receive.  A value outside ``<g>`` -- say
+        the small-order element ``p - 1`` -- would collapse the key space and
+        let the party that sent it learn the other's secret.  This is beyond the
+        semi-honest model the project assumes, but the check costs one
+        exponentiation against a protocol break, so it is always on.
+        """
+        if not isinstance(x, int):
+            raise ValueError(f"OT {name} must be an integer, got {type(x).__name__}")
+        if not 1 < x < self.p - 1:
+            raise ValueError(f"OT {name} is outside the valid range for this group")
+        if pow(x, self.q, self.p) != 1:
+            raise ValueError(f"OT {name} is not in the order-q subgroup")
+        return x
+
 
 def _modp_group(p: int) -> DHGroup:
     # g = 4 = 2^2 is a quadratic residue, hence a generator of the order-q
@@ -103,13 +120,32 @@ DEFAULT_GROUP = GROUP_2048
 GROUPS: dict[str, DHGroup] = {"1024": GROUP_1024, "2048": GROUP_2048}
 
 
-def _kdf(group: DHGroup, index: int, group_elem: int, n_bytes: int) -> bytes:
-    """Derive a one-time pad key from a shared group element."""
-    data = index.to_bytes(4, "big") + group_elem.to_bytes(group.elem_bytes, "big")
+def _kdf(
+    group: DHGroup, index: int, A: int, B: int, group_elem: int, n_bytes: int
+) -> bytes:
+    """Derive a one-time pad key from a shared group element.
+
+    The whole transcript goes into the hash -- the instance index and both
+    public values ``A`` and ``B``, not just the shared element -- as in the
+    Chou-Orlandi paper.  Hashing the transcript is what the security proof
+    assumes, and it domain-separates instances and sessions that might otherwise
+    share a group element.
+    """
+    data = (
+        index.to_bytes(4, "big")
+        + A.to_bytes(group.elem_bytes, "big")
+        + B.to_bytes(group.elem_bytes, "big")
+        + group_elem.to_bytes(group.elem_bytes, "big")
+    )
     return hashlib.sha256(data).digest()[:n_bytes]
 
 
 def _xor_bytes(a: bytes, b: bytes) -> bytes:
+    # Strict: zip() would silently truncate to the shorter operand, turning a
+    # corrupted ciphertext into a short (and wrong) wire label instead of an
+    # error.
+    if len(a) != len(b):
+        raise ValueError(f"length mismatch in OT one-time pad: {len(a)} != {len(b)}")
     return bytes(x ^ y for x, y in zip(a, b))
 
 
@@ -133,10 +169,13 @@ class OTSender:
             raise ValueError("mismatched OT batch sizes")
         out: list[tuple[bytes, bytes]] = []
         for i, (B, (m0, m1)) in enumerate(zip(receiver_B, messages)):
+            self.group.check_element(B, f"B[{i}]")
+            if len(m0) != len(m1):
+                raise ValueError("OT message pair must have equal lengths")
             n = len(m0)
-            k0 = _kdf(self.group, i, self.group.pow(B, self._a), n)
+            k0 = _kdf(self.group, i, self.A, B, self.group.pow(B, self._a), n)
             b_over_a = (B * self._inv_A) % self.group.p
-            k1 = _kdf(self.group, i, self.group.pow(b_over_a, self._a), n)
+            k1 = _kdf(self.group, i, self.A, B, self.group.pow(b_over_a, self._a), n)
             out.append((_xor_bytes(m0, k0), _xor_bytes(m1, k1)))
         return out
 
@@ -146,8 +185,11 @@ class OTReceiver:
 
     def __init__(self, sender_A: int, group: DHGroup = DEFAULT_GROUP) -> None:
         self.group = group
-        self.A = sender_A
+        # Validate before use: a sender's A outside the subgroup could otherwise
+        # leak the choice bit.
+        self.A = group.check_element(sender_A, "A")
         self._choices: list[int] = []
+        self._B: list[int] = []
         self._keys: list[int] = []  # shared element A^b per instance
 
     def choose(self, choice_bits: list[int]) -> list[int]:
@@ -161,13 +203,42 @@ class OTReceiver:
             B = gb if c == 0 else (self.A * gb) % self.group.p
             self._keys.append(self.group.pow(self.A, b))  # A^b = g^{ab}
             B_list.append(B)
+        self._B = B_list
         return B_list
 
-    def finalize(self, ciphertexts: list[tuple[bytes, bytes]]) -> list[bytes]:
-        """Decrypt exactly the chosen message from each ciphertext pair."""
+    def finalize(
+        self, ciphertexts: list[tuple[bytes, bytes]], expected_len: int | None = None
+    ) -> list[bytes]:
+        """Decrypt exactly the chosen message from each ciphertext pair.
+
+        Args:
+            ciphertexts: the sender's ``(ct0, ct1)`` pairs.
+            expected_len: length every recovered message must have. The one-time
+                pad is derived at the ciphertext's own length, so without this a
+                truncated ciphertext would decrypt "successfully" into a short
+                wire label instead of failing -- pass the caller's known label
+                size to close that off.
+        """
+        if len(ciphertexts) != len(self._choices):
+            raise ValueError(
+                f"expected {len(self._choices)} OT ciphertext pairs, "
+                f"got {len(ciphertexts)}"
+            )
         out: list[bytes] = []
         for i, (c, (ct0, ct1)) in enumerate(zip(self._choices, ciphertexts)):
+            if len(ct0) != len(ct1):
+                raise ValueError(
+                    f"length mismatch in OT ciphertext pair {i}: "
+                    f"{len(ct0)} != {len(ct1)}"
+                )
+            if expected_len is not None and len(ct0) != expected_len:
+                raise ValueError(
+                    f"length mismatch in OT ciphertext {i}: expected "
+                    f"{expected_len} bytes, got {len(ct0)}"
+                )
             chosen_ct = ct0 if c == 0 else ct1
-            key = _kdf(self.group, i, self._keys[i], len(chosen_ct))
+            key = _kdf(
+                self.group, i, self.A, self._B[i], self._keys[i], len(chosen_ct)
+            )
             out.append(_xor_bytes(chosen_ct, key))
         return out

@@ -4,22 +4,28 @@ secure_sum.py
 Phase 1: the 4-node secure sum (vectorize -> secret-share -> exchange -> sum).
 
 Each node computes its local region vector V, additively secret-shares every
-element across the other nodes, and locally sums the shares it receives. No
+element across the other nodes, and locally sums the shares it receives.  No
 node ever learns another node's raw V; each ends up holding one share of the
 Global Region Vector.
 
-Each node is launched separately (see main.py) with its node id, the path to
-its local records file, and the path to its own Ed25519 private signing key
-(keys/node<N>.key, never committed). The matching public keys are published in
-config.json, so SIGMA authenticates which specific node each peer is.
+Because additive shares add without any further communication, the summation
+step is purely local -- the homomorphic property the proposal relies on.
 
-Transport contract (node.py):
-    node.send(peer_id, message: dict)   -- sends a JSON-able dict to peer_id
-    node.inbox                          -- queue.Queue of incoming messages;
-                                           .get() blocks until one arrives
+Each node is launched separately (see ``main.py``) with its node id, the path to
+its local records file, and the path to its own Ed25519 private signing key
+(``keys/node<N>.key``, never committed).  The matching public keys are published
+in ``config.json``, so SIGMA authenticates which specific node each peer is.
+
+Transport contract (:mod:`node`):
+    ``node.send(peer_id, phase, payload)``   -- one phase-tagged message
+    ``node.collect(phase, senders, timeout)``-- exactly one message per sender,
+                                                keyed by the *authenticated* id
 """
 
 from secret_sharing import split_into_shares
+
+#: Message phase tag for Phase 1 traffic.
+SHARES_PHASE = "shares"
 
 
 def compute_local_shares(
@@ -62,7 +68,7 @@ def distribute_shares(
     Args:
         my_node_id:     this node's id.
         shares_by_peer: output of compute_local_shares().
-        send_fn:        callable(peer_id, message_dict) -- node.send in practice.
+        send_fn:        callable(peer_id, phase, payload) -- node.send in practice.
 
     Returns:
         This node's own share vector, which is never sent over the network.
@@ -73,44 +79,12 @@ def distribute_shares(
         if peer_id == my_node_id:
             my_share = share_vector
             continue
-        send_fn(peer_id, {"shares": share_vector})
+        send_fn(peer_id, SHARES_PHASE, {"shares": share_vector})
 
     if my_share is None:
         raise ValueError(f"node {my_node_id} has no share of its own vector")
 
     return my_share
-
-
-def collect_shares(inbox, num_expected: int) -> list[list[int]]:
-    """
-    Block until this node has received share vectors from all other peers.
-
-    Args:
-        inbox:        the node's inbox queue.
-        num_expected: how many share vectors to wait for (num_nodes - 1).
-
-    Returns:
-        The received share vectors, each of length M.
-
-    The inbox is shared across protocol phases, so a message that is not a
-    Phase 1 share (a peer that finished early and already sent its Phase 2
-    message) is held aside and put back before returning. Discarding it would
-    lose that peer's contribution permanently and deadlock the next phase.
-    """
-    result = []
-    holdover = []
-
-    while len(result) < num_expected:
-        msg = inbox.get()
-        if "shares" in msg:
-            result.append(msg["shares"])
-        else:
-            holdover.append(msg)
-
-    for msg in holdover:
-        inbox.put(msg)
-
-    return result
 
 
 def local_sum(all_share_vectors: list[list[int]], p: int) -> list[int]:
@@ -150,15 +124,28 @@ def local_sum(all_share_vectors: list[list[int]], p: int) -> list[int]:
 
 
 def run_secure_sum(
-    node_id: int, node, V: list[int], p: int, node_ids: list[int]
+    node_id: int,
+    node,
+    V: list[int],
+    p: int,
+    node_ids: list[int],
+    timeout: float | None = None,
 ) -> list[int]:
     """
     Run one node's part of Phase 1 and return its share of the global vector.
+
+    The collection step requires exactly one share vector from each *other*
+    node, identified by the id SIGMA authenticated -- so a peer cannot
+    contribute twice and displace someone else's data.
     """
     shares_by_peer = compute_local_shares(V, p, node_ids)
     my_share = distribute_shares(node_id, shares_by_peer, node.send)
-    received = collect_shares(node.inbox, num_expected=len(node_ids) - 1)
-    return local_sum([my_share] + received, p)
+
+    peers = [n for n in node_ids if n != node_id]
+    received = node.collect(SHARES_PHASE, peers, timeout=timeout)
+    return local_sum(
+        [my_share] + [received[peer]["shares"] for peer in peers], p
+    )
 
 
 def reconstruct_global(local_results: list[list[int]], p: int) -> list[int]:

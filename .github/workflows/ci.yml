@@ -1,0 +1,26 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      # The default suite: everything except the full-strength runs (2048-bit
+      # OT and the multi-process pipelines), which are exercised by the job
+      # below so a normal push stays fast.
+      - name: Unit and integration tests
+        run: uv run pytest -q -m "not slow"
+
+      - name: Full-strength and end-to-end tests
+        run: uv run pytest -q -m "slow"

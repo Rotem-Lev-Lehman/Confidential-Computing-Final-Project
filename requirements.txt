@@ -1,1 +1,4 @@
+# Runtime dependencies. Kept in sync with pyproject.toml, which is the source
+# of truth -- prefer `uv sync --extra dev`.
 cryptography>=42
+mpyc>=0.11

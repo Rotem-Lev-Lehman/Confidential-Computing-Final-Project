@@ -22,4 +22,25 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
+# The GC engine is a package; the networking / secure-summation layer is a set
+# of top-level modules that the node processes run from the repo root.
 packages = ["smpc_gc"]
+include = [
+    "config_loader.py",
+    "gc_channel.py",
+    "gc_handoff.py",
+    "keygen.py",
+    "node.py",
+    "secret_sharing.py",
+    "secure_channel.py",
+    "secure_sum.py",
+    "share_reduction.py",
+    "sigma_handshake.py",
+    "vectorize.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: full-strength runs (2048-bit OT, multi-process pipelines)",
+]

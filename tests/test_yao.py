@@ -37,16 +37,63 @@ def test_ot_receiver_gets_only_chosen_message(group):
         assert got == [m[i][c] for i, c in enumerate(choices)]
 
 
-def test_ot_choice_bit_is_hidden_from_transcript():
-    # B is a group element that is uniform regardless of the choice bit, so the
-    # sender's view (A, B) cannot distinguish c=0 from c=1.  We only sanity-check
-    # that both choices produce valid group elements in range.
+def test_ot_choice_bit_is_hidden_from_the_senders_view():
+    """The sender sees only ``B``, which is uniform in <g> either way.
+
+    ``B`` is ``g^b`` for c=0 and ``A*g^b`` for c=1; with ``b`` uniform, both are
+    uniform over the subgroup, so the sender's view is independent of the choice
+    bit.  Sampled here: the two distributions must be statistically
+    indistinguishable, which we check by comparing how the values split around
+    the midpoint of the group -- a real (if coarse) distinguishing test rather
+    than a range check.
+    """
     group = GROUP_1024
+    sender = OTSender(group)
+    trials = 400
+    halves = {}
     for c in (0, 1):
-        sender = OTSender(group)
         receiver = OTReceiver(sender.public_key(), group)
-        (B,) = receiver.choose([c])
-        assert 1 <= B < group.p
+        values = receiver.choose([c] * trials)
+        assert all(1 < B < group.p - 1 for B in values), "B left the valid range"
+        assert len(set(values)) == trials, "B repeated -- b is not fresh per instance"
+        halves[c] = sum(1 for B in values if B < group.p // 2) / trials
+    # Both should sit near 0.5; a bit that leaked would skew one of them.
+    assert abs(halves[0] - halves[1]) < 0.12, halves
+
+
+def test_ot_rejects_a_sender_key_outside_the_subgroup():
+    """S9: a bogus ``A`` could otherwise leak the receiver's choice bit."""
+    group = GROUP_1024
+    for bad in (1, group.p - 1, group.p, 0, group.g + 1):
+        with pytest.raises(ValueError):
+            OTReceiver(bad, group)
+
+
+def test_ot_rejects_a_receiver_value_outside_the_subgroup():
+    group = GROUP_1024
+    sender = OTSender(group)
+    with pytest.raises(ValueError):
+        sender.respond([group.p - 1], [(b"0" * 16, b"1" * 16)])
+
+
+def test_ot_rejects_a_truncated_ciphertext():
+    """A short ciphertext must fail, not silently yield a short wire label."""
+    group = GROUP_1024
+    sender = OTSender(group)
+    receiver = OTReceiver(sender.public_key(), group)
+    B = receiver.choose([0])
+    (ct0, ct1) = sender.respond(B, [(b"m0" * 8, b"m1" * 8)])[0]
+    with pytest.raises(ValueError, match="length mismatch"):
+        receiver.finalize([(ct0[:8], ct1)])
+
+
+def test_ot_rejects_a_wrong_sized_batch():
+    group = GROUP_1024
+    sender = OTSender(group)
+    receiver = OTReceiver(sender.public_key(), group)
+    receiver.choose([0, 1])
+    with pytest.raises(ValueError, match="expected 2"):
+        receiver.finalize([(b"a" * 16, b"b" * 16)])
 
 
 # --- garbling ---------------------------------------------------------------
@@ -117,6 +164,24 @@ def test_yao_backend_rejects_share_overflow():
 
 
 # --- split garbler / evaluator over a channel -------------------------------
+
+
+def test_protocol_rejects_an_out_of_sequence_message():
+    """C5: the halves check the message type instead of reading a missing key."""
+    from smpc_gc.yao.protocol import _expect
+
+    class _Canned:
+        def __init__(self, msg):
+            self._msg = msg
+
+        def recv(self):
+            return self._msg
+
+    assert _expect(_Canned({"type": "garbled", "x": 1}), "garbled")["x"] == 1
+    with pytest.raises(ValueError, match="desynchronized"):
+        _expect(_Canned({"type": "output"}), "garbled")
+    with pytest.raises(ValueError, match="desynchronized"):
+        _expect(_Canned("not a dict"), "garbled")
 
 
 def test_garbler_and_evaluator_run_over_a_channel():

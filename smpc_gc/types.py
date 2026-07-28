@@ -35,12 +35,13 @@ class ThresholdProblem:
       never learned locally.
 
     Notes:
-        For the threshold circuit we assume ``A + B`` equals the true regional
-        count without finite-field wraparound (i.e. the shares reconstruct
-        directly, not modulo ``p``).  This is the standard mocking assumption
-        for developing the GC engine in isolation; reconciling the modular
-        reconstruction from the secure-summation layer is an interface concern
-        handled at integration time.
+        ``modulus`` is how the finite field of the secure-summation layer is
+        carried across this boundary.  When it is set, ``a_shares`` and
+        ``b_shares`` are additive shares over 𝔽_modulus, so they reconstruct
+        the true count only modulo ``modulus``, and the backend reduces
+        ``A + B`` accordingly before comparing.  When it is ``None`` the shares
+        are assumed to reconstruct directly over the integers — the simpler
+        setting used by the mocked problems in ``problems/``.
     """
 
     threshold: int
@@ -49,6 +50,12 @@ class ThresholdProblem:
     b_shares: list[int] | None = None
     bit_length: int = 32
     clear_token: int = CLEAR_TOKEN
+    modulus: int | None = None
+
+    def reconstruct(self, a: int, b: int) -> int:
+        """The true count for one region, from the two shares."""
+        total = a + b
+        return total % self.modulus if self.modulus is not None else total
 
     @property
     def num_regions(self) -> int:
@@ -77,12 +84,24 @@ class ThresholdProblem:
                 f"clear_token {self.clear_token} collides with a region id; "
                 "region ids must be distinct from the 'Clear' sentinel"
             )
+        if self.modulus is not None and not 2 <= self.modulus <= (1 << self.bit_length):
+            raise ValueError(
+                f"modulus {self.modulus} must fit in bit_length={self.bit_length} "
+                "bits (both shares are reduced mod it, so each must fit its wires)"
+            )
         for name, vec in (("a_shares", self.a_shares), ("b_shares", self.b_shares)):
             if vec is not None and len(vec) != self.num_regions:
                 raise ValueError(
                     f"{name} has length {len(vec)} but there are "
                     f"{self.num_regions} regions"
                 )
+            if vec is not None and self.modulus is not None:
+                bad = next((v for v in vec if not 0 <= v < self.modulus), None)
+                if bad is not None:
+                    raise ValueError(
+                        f"{name} contains {bad}, which is not reduced mod "
+                        f"{self.modulus}"
+                    )
         if party is None:
             if self.a_shares is None or self.b_shares is None:
                 raise ValueError(
@@ -103,7 +122,7 @@ class ThresholdProblem:
             return None
         results = []
         for j, rid in enumerate(self.region_ids):
-            crossed = (self.a_shares[j] + self.b_shares[j]) > self.threshold
+            crossed = self.reconstruct(self.a_shares[j], self.b_shares[j]) > self.threshold
             revealed = rid if crossed else self.clear_token
             results.append(RegionResult(j, rid, revealed, crossed))
         return results
