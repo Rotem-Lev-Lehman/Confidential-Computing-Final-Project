@@ -92,7 +92,7 @@ We evaluated four paradigms before committing.
 
 | Approach | Trust assumption | Privacy | Overhead | Verdict |
 |---|---|---|---|---|
-| **Centralised TEE** (Intel SGX) | Trust the CPU vendor and the enclave's hardware security | High, but hardware-rooted | Low — near-native speed | Rejected: moves the trust problem into silicon rather than solving it, and requires specific hardware. A side-channel or firmware break exposes everything at once. |
+| **Centralised TEE** (Intel SGX) | Trust the CPU vendor and the enclave's hardware security | High, but hardware-rooted | Low — near-native speed | Rejected: moves the trust problem into silicon rather than solving it, and requires specific hardware. |
 | **Fully Homomorphic Encryption** | Lattice hardness | High | Very high — non-linear comparison circuits are the FHE worst case | Rejected: the threshold comparison is precisely the operation FHE is worst at. |
 | **Differential Privacy** | Trust the aggregator to add noise honestly | Statistical only; introduces error | Very low | Rejected: **violates the correctness requirement.** Noise means a region at 51 cases can report clear, and one at 49 can trigger a lockdown. Unacceptable for a public health decision. |
 | **Hybrid SMPC** (secret sharing + Yao's GC) ✅ | Non-collusion among the computing nodes | Cryptographic and exact | Medium — fast linear phase, bounded 2PC phase | **Chosen.** Exact results, no trusted hardware, no trusted aggregator, and the expensive machinery is used only where it is genuinely needed. |
@@ -106,6 +106,9 @@ A single-primitive design would be wasteful in both directions:
   in a single local addition with *zero* communication.
 * Doing **everything** in additive secret sharing cannot work: comparison is
   non-linear, and additive sharing over 𝔽ₚ is only homomorphic for addition.
+  There is of course an option to calculate multiplication in a shared version,
+  which makes the possibility to calculate any function that way - but it is
+  computationally expensive.
 
 So the design splits along the linear/non-linear boundary. Summation — the bulk
 of the data — is handled by information-theoretically secure secret sharing at
@@ -129,7 +132,7 @@ insight of the project, and it is what makes the system practical.
    │   invariant: G_1 + G_2 + G_3 + G_4 = true totals (mod p)              │
    │   nobody holds the totals; each G_i alone is uniform over F_p         │
    └───────────────────────────────┬───────────────────────────────────────┘
-                                   │
+                                │
    ┌───────────────────────────────▼───────────────────────────────────────┐
    │ PHASE 2 — Protocol switch: share migration           4 nodes ──► 2    │
    │                                                                       │
@@ -139,7 +142,7 @@ insight of the project, and it is what makes the system practical.
    │   invariant: A + B = true count (mod p)                               │
    │   A and B are each uniform over F_p taken alone                       │
    └───────────────────────────────┬───────────────────────────────────────┘
-                                   │
+                                │
    ┌───────────────────────────────▼───────────────────────────────────────┐
    │ PHASE 3 — Yao's Garbled Circuits                node 1 <──> node 2    │
    │                                                                       │
@@ -151,8 +154,8 @@ insight of the project, and it is what makes the system practical.
    │                                                                       │
    │   per region:  (A + B mod p) > 50  ?  region_id  :  "Clear"           │
    └───────────────────────────────┬───────────────────────────────────────┘
-                                   ▼
-                    Node 2 publishes the quarantine alert list
+                                ▼
+                Node 2 publishes the quarantine alert list
 ```
 
 Every message in every phase — including Phase 3's garbled tables and OT values
@@ -175,6 +178,49 @@ Every message in every phase — including Phase 3's garbled tables and OT value
 
 The counts behind those verdicts are never assembled anywhere — not on a node,
 not on disk, not in a log, not in a message.
+
+### Four nodes is the deployed instance, not a limit of the design
+
+The architecture above is drawn — and implemented — for the four hospital
+networks the proposal specifies, but nothing in the construction is tied to that
+number. Additive sharing over 𝔽ₚ splits a value into any `n` shares, the local
+summation is the same local addition regardless of `n`, and Phase 2 consolidates
+whatever set of shares exists into the two values `A` and `B`. Phase 3 is
+unchanged entirely: it always sees exactly two parties, no matter how many
+contributed. So an `n`-node deployment is a matter of configuration, not of
+redesign.
+
+What *does* not scale gracefully is the communication pattern of Phase 1. The
+current mesh is **all-to-all**: every node establishes a SIGMA-authenticated link
+with every other node, sends each of them one share of its local vector, and
+receives one share back from each. That is `n(n−1)` directed links, `n(n−1)`
+share-vector transmissions, and — the expensive part — `n(n−1)` handshakes, each
+costing a signature, a verification and a Diffie–Hellman exchange. At `n = 4`
+this is twelve links and entirely negligible. At `n = 1000` it is roughly a
+million, and the handshake cost alone would dominate the run long before any
+cryptography relevant to the actual computation began.
+
+The fix does not require changing the primitives, only who talks to whom.
+Designate a small fixed committee of `m` **computing nodes** (`m ≪ n`) and let
+the remaining nodes be pure **input nodes**. Each input node then splits its
+local vector into `m` shares and sends one to each committee member — and to
+nobody else. Committee member `i` locally sums everything it received into `G_i`,
+exactly as today, and the invariant `Σ G_i ≡` true totals still holds because
+additive shares add regardless of who generated them. Phase 2 then folds the `m`
+consolidated vectors into `A` and `B`, and Phase 3 proceeds untouched.
+
+The communication drops from `Θ(n²)` to `Θ(m·n)` — linear in the number of
+participants once `m` is fixed. The current system is the `m = n = 4` special
+case, where every node happens to be both an input node and a computing node.
+
+The security consequence is worth stating rather than hiding: the non-collusion
+assumption narrows. Today it applies to whichever nodes end up holding `A` and
+`B`; under a committee it applies to the committee, and an input node's privacy
+rests on the `m` computing nodes not pooling their shares. That is the usual
+trade in client/server SMPC deployments, and `m` is the dial: larger `m` means a
+weaker assumption and more traffic, smaller `m` the reverse. The information-
+theoretic guarantee itself is unaffected — any proper subset of the `m` shares is
+still uniform and independent of the secret.
 
 ---
 
@@ -820,6 +866,7 @@ Stated plainly rather than omitted.
 | **Non-collusion required** between the two 2PC parties | Nodes 1 and 2 together reconstruct all counts | An `n`-party protocol with an honest majority (this is where MPyC's 4-party mode would genuinely fit) |
 | **Sub-threshold regions are named** (as `Clear`) | Reveals *that* a region is clear, never its count | Shuffle region order or pad the output set |
 | **Fixed topology, no failure handling** | A node that drops stops the run | Per the proposal's stated assumptions; dynamic membership is out of scope |
+| **All-to-all Phase 1 mesh** | `n` nodes cost `Θ(n²)` links, handshakes and share transmissions; fine at the deployed `n = 4`, prohibitive for large `n` | A committee of `m ≪ n` computing nodes that all `n` input nodes share to, giving `Θ(m·n)` communication — see §3. Narrows the non-collusion assumption to the committee |
 | **Multi-day trend detection not implemented** | `proposal.md` §4 future work — flagging regions trending upward without crossing on any single day | Requires state across runs; the circuit would compare a windowed sum |
 
 ---
