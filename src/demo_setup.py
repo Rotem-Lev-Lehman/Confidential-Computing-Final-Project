@@ -17,9 +17,9 @@ deliberately kept out of git (see ``.gitignore``):
 
 Usage::
 
-    uv run python demo_setup.py                 # keys + config + data
-    uv run python demo_setup.py --seed 7        # a different case distribution
-    uv run python demo_setup.py --keep-keys     # regenerate data only
+    uv run python src/demo_setup.py             # keys + config + data
+    uv run python src/demo_setup.py --seed 7    # a different case distribution
+    uv run python src/demo_setup.py --keep-keys # regenerate data only
 
 The generated case counts are deterministic for a given ``--seed``, so a demo
 can be rehearsed and reproduced exactly.  They straddle the quarantine
@@ -35,7 +35,7 @@ from pathlib import Path
 
 from keygen import write_keypair
 
-CONFIG_PATH = Path(__file__).parent / "config.json"
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 
 
 def generate_keys(config: dict, out_dir: Path) -> dict[str, str]:

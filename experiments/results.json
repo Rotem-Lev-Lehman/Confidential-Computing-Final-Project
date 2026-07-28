@@ -1,7 +1,7 @@
 {
-  "quick": false,
-  "env": {
-    "date": "2026-07-28 14:07:22",
+  "generated": "2026-07-28 14:45:23",
+  "mode": "full",
+  "environment": {
     "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
     "python": "3.11.11",
     "cpu_count": 14
@@ -12,394 +12,228 @@
         "problem": "1",
         "regions": 4,
         "bit_length": 16,
-        "expected": [
-          1001,
-          0,
-          1003,
-          0
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 6.469,
+          "ot-2048": {
+            "seconds_wall": 5.893,
             "revealed": [
               1001,
               0,
               1003,
               0
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 1.18,
+          "ot-1024": {
+            "seconds_wall": 1.749,
             "revealed": [
               1001,
               0,
               1003,
               0
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.174,
-            "revealed": [
-              1001,
-              0,
-              1003,
-              0
-            ],
-            "bytes_on_wire": 152,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       },
       {
         "problem": "2",
         "regions": 3,
         "bit_length": 16,
-        "expected": [
-          0,
-          0,
-          0
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 5.025,
+          "ot-2048": {
+            "seconds_wall": 4.742,
             "revealed": [
               0,
               0,
               0
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 0.801,
+          "ot-1024": {
+            "seconds_wall": 0.904,
             "revealed": [
               0,
               0,
               0
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.107,
-            "revealed": [
-              0,
-              0,
-              0
-            ],
-            "bytes_on_wire": 114,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       },
       {
         "problem": "3",
         "regions": 3,
         "bit_length": 16,
-        "expected": [
-          3001,
-          3002,
-          3003
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 5.214,
+          "ot-2048": {
+            "seconds_wall": 4.969,
             "revealed": [
               3001,
               3002,
               3003
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 0.928,
+          "ot-1024": {
+            "seconds_wall": 1.889,
             "revealed": [
               3001,
               3002,
               3003
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.179,
-            "revealed": [
-              3001,
-              3002,
-              3003
-            ],
-            "bytes_on_wire": 114,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       },
       {
         "problem": "4",
         "regions": 3,
         "bit_length": 16,
-        "expected": [
-          0,
-          4002,
-          0
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 4.933,
+          "ot-2048": {
+            "seconds_wall": 4.682,
             "revealed": [
               0,
               4002,
               0
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 0.803,
+          "ot-1024": {
+            "seconds_wall": 1.217,
             "revealed": [
               0,
               4002,
               0
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.206,
-            "revealed": [
-              0,
-              4002,
-              0
-            ],
-            "bytes_on_wire": 114,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       },
       {
         "problem": "5",
         "regions": 4,
         "bit_length": 16,
-        "expected": [
-          5001,
-          0,
-          0,
-          5004
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 6.516,
+          "ot-2048": {
+            "seconds_wall": 6.353,
             "revealed": [
               5001,
               0,
               0,
               5004
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 1.218,
+          "ot-1024": {
+            "seconds_wall": 1.64,
             "revealed": [
               5001,
               0,
               0,
               5004
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.196,
-            "revealed": [
-              5001,
-              0,
-              0,
-              5004
-            ],
-            "bytes_on_wire": 152,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       },
       {
         "problem": "6",
         "regions": 3,
         "bit_length": 20,
-        "expected": [
-          6001,
-          0,
-          0
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 6.242,
+          "ot-2048": {
+            "seconds_wall": 5.539,
             "revealed": [
               6001,
               0,
               0
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 1.115,
+          "ot-1024": {
+            "seconds_wall": 1.235,
             "revealed": [
               6001,
               0,
               0
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.203,
-            "revealed": [
-              6001,
-              0,
-              0
-            ],
-            "bytes_on_wire": 114,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       },
       {
         "problem": "7",
         "regions": 1,
         "bit_length": 16,
-        "expected": [
-          7001
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 1.799,
+          "ot-2048": {
+            "seconds_wall": 1.393,
             "revealed": [
               7001
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 0.275,
+          "ot-1024": {
+            "seconds_wall": 0.537,
             "revealed": [
               7001
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.103,
-            "revealed": [
-              7001
-            ],
-            "bytes_on_wire": 38,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       },
       {
         "problem": "8",
         "regions": 1,
         "bit_length": 16,
-        "expected": [
-          0
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 1.846,
+          "ot-2048": {
+            "seconds_wall": 1.508,
             "revealed": [
               0
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 0.284,
+          "ot-1024": {
+            "seconds_wall": 0.741,
             "revealed": [
               0
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.183,
-            "revealed": [
-              0
-            ],
-            "bytes_on_wire": 38,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       },
       {
         "problem": "9",
         "regions": 2,
         "bit_length": 8,
-        "expected": [
-          0,
-          9002
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 1.802,
+          "ot-2048": {
+            "seconds_wall": 1.919,
             "revealed": [
               0,
               9002
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 0.407,
+          "ot-1024": {
+            "seconds_wall": 0.678,
             "revealed": [
               0,
               9002
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.115,
-            "revealed": [
-              0,
-              9002
-            ],
-            "bytes_on_wire": 72,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       },
       {
         "problem": "10",
         "regions": 8,
         "bit_length": 16,
-        "expected": [
-          10001,
-          10002,
-          10003,
-          0,
-          0,
-          10006,
-          10007,
-          10008
-        ],
         "runs": {
-          "yao-2048": {
-            "seconds_wall": 13.313,
+          "ot-2048": {
+            "seconds_wall": 11.79,
             "revealed": [
               10001,
               10002,
@@ -410,11 +244,10 @@
               10007,
               10008
             ],
-            "bytes_on_wire": null,
             "matches_solution": true
           },
-          "yao-1024": {
-            "seconds_wall": 2.454,
+          "ot-1024": {
+            "seconds_wall": 2.909,
             "revealed": [
               10001,
               10002,
@@ -425,26 +258,9 @@
               10007,
               10008
             ],
-            "bytes_on_wire": null,
-            "matches_solution": true
-          },
-          "mpyc": {
-            "seconds_wall": 0.124,
-            "revealed": [
-              10001,
-              10002,
-              10003,
-              0,
-              0,
-              10006,
-              10007,
-              10008
-            ],
-            "bytes_on_wire": 304,
             "matches_solution": true
           }
-        },
-        "backends_agree": true
+        }
       }
     ]
   },
@@ -454,36 +270,32 @@
         "regions": 1,
         "bit_length": 16,
         "seconds": {
-          "yao-2048": 1.783,
-          "yao-1024": 0.377,
-          "mpyc": 0.111
+          "ot-2048": 1.902,
+          "ot-1024": 0.448
         }
       },
       {
         "regions": 2,
         "bit_length": 16,
         "seconds": {
-          "yao-2048": 3.658,
-          "yao-1024": 0.667,
-          "mpyc": 0.097
+          "ot-2048": 3.215,
+          "ot-1024": 1.053
         }
       },
       {
         "regions": 4,
         "bit_length": 16,
         "seconds": {
-          "yao-2048": 7.072,
-          "yao-1024": 1.214,
-          "mpyc": 0.205
+          "ot-2048": 6.069,
+          "ot-1024": 1.202
         }
       },
       {
         "regions": 8,
         "bit_length": 16,
         "seconds": {
-          "yao-2048": 12.992,
-          "yao-1024": 2.334,
-          "mpyc": 0.215
+          "ot-2048": 12.344,
+          "ot-1024": 2.68
         }
       }
     ],
@@ -492,100 +304,87 @@
         "regions": 4,
         "bit_length": 8,
         "seconds": {
-          "yao-2048": 3.54,
-          "yao-1024": 0.636,
-          "mpyc": 0.103
+          "ot-2048": 3.208,
+          "ot-1024": 1.04
         }
       },
       {
         "regions": 4,
         "bit_length": 16,
         "seconds": {
-          "yao-2048": 7.104,
-          "yao-1024": 1.264,
-          "mpyc": 0.193
+          "ot-2048": 5.971,
+          "ot-1024": 1.914
         }
       },
       {
         "regions": 4,
         "bit_length": 24,
         "seconds": {
-          "yao-2048": 10.147,
-          "yao-1024": 1.681,
-          "mpyc": 0.198
+          "ot-2048": 10.377,
+          "ot-1024": 1.901
         }
       },
       {
         "regions": 4,
         "bit_length": 32,
         "seconds": {
-          "yao-2048": 14.141,
-          "yao-1024": 2.368,
-          "mpyc": 0.115
+          "ot-2048": 12.449,
+          "ot-1024": 3.218
         }
       }
     ]
   },
   "overhead": {
-    "yao-2048": 0.922,
-    "yao-1024": 0.285,
-    "mpyc": 0.207
+    "seconds": {
+      "ot-2048": 1.439,
+      "ot-1024": 0.468
+    },
+    "note": "1 region, 8-bit shares, two processes"
   },
   "communication": {
     "problem": "1",
     "regions": 4,
     "bit_length": 16,
     "rows": {
-      "yao-2048": {
-        "bytes_total": 125971,
-        "bytes_per_region": 31492,
+      "ot-2048": {
+        "garbler_to_evaluator_bytes": 85916,
+        "evaluator_to_garbler_bytes": 39946,
+        "bytes_total": 125862,
+        "bytes_per_region": 31466,
         "messages": 20
       },
-      "yao-1024": {
-        "bytes_total": 104962,
-        "bytes_per_region": 26240,
+      "ot-1024": {
+        "garbler_to_evaluator_bytes": 84718,
+        "evaluator_to_garbler_bytes": 20215,
+        "bytes_total": 104933,
+        "bytes_per_region": 26233,
         "messages": 20
       }
     }
   },
-  "privacy": {
-    "secret_of_party0": 12345,
-    "party1_raw_view": 12345,
-    "mpyc_2party_input_leaked": true
-  },
   "footprint": {
     "yao_crypto_core": {
       "files": 5,
-      "lines": 931,
-      "code_lines": 726
+      "lines": 930,
+      "code_lines": 725
     },
-    "yao_backend_adapter": {
+    "threshold_driver": {
       "files": 1,
-      "lines": 181,
-      "code_lines": 146
-    },
-    "mpyc_backend_adapter": {
-      "files": 1,
-      "lines": 221,
-      "code_lines": 168
+      "lines": 202,
+      "code_lines": 158
     },
     "shared_infrastructure": {
-      "files": 6,
-      "lines": 869,
-      "code_lines": 690
+      "files": 5,
+      "lines": 695,
+      "code_lines": 567
     },
-    "external_mpyc_library": {
-      "files": 17,
-      "lines": 15862,
-      "code_lines": 12855
+    "transport_and_summation": {
+      "files": 11,
+      "lines": 1896,
+      "code_lines": 1459
     },
-    "runtime_dependencies": {
-      "yao": [],
-      "mpyc": [
-        "mpyc"
-      ]
-    },
-    "mpyc_version": "0.11"
-  },
-  "total_seconds": 145.7
+    "runtime_dependencies": [
+      "cryptography (standard primitives only)"
+    ]
+  }
 }

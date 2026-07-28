@@ -11,32 +11,26 @@ two parties:
 
 the parties jointly and securely evaluate, for each region ``j``::
 
-    output_j = (A_j + B_j) > threshold ? region_id_j : "Clear"
+    output_j = (A_j + B_j mod p) > threshold ? region_id_j : "Clear"
 
 so that a region's identity is revealed **only** when the combined case count
 crosses the quarantine threshold, and nothing leaks about sub-threshold
-regions.
+regions — a region with 0 cases and one with 49 produce identical transcripts.
 
-The secure computation is done by a pluggable backend, selected with a single
-CLI flag (``--backend``):
+The secure computation is Yao's Garbled Circuits and Oblivious Transfer,
+implemented from scratch in :mod:`smpc_gc.yao`.  No SMPC library is involved;
+see ``README.md`` for why the one we evaluated (MPyC) was dropped.
 
-    * :mod:`smpc_gc.yao`                   — our from-scratch implementation of
-      Yao's Garbled Circuits + Oblivious Transfer (the default backend and the
-      core cryptographic deliverable)
-    * :mod:`smpc_gc.backends.mpyc_backend` — the MPyC framework
+Layout:
 
-The MPyC backend exists to demonstrate the same computation running on an
-established library and to satisfy the "swappable library" requirement; the
-real garbling/OT protocol lives in :mod:`smpc_gc.yao`.
-
-Shared, backend-agnostic resources (also the integration points with the
-networking / secure-summation layer):
-
+    * :mod:`smpc_gc.yao`       — the protocol itself: the boolean circuit,
+      garbling, Oblivious Transfer, and the two party halves
+    * :mod:`smpc_gc.threshold` — ``evaluate()``, the entry point that runs one
+      circuit instance per region
     * :mod:`smpc_gc.types`     — the ``ThresholdProblem`` / ``RegionResult``
-      interface boundary
+      interface boundary with the secure-summation layer
     * :mod:`smpc_gc.channel`   — the swappable party-to-party transport
-    * :mod:`smpc_gc.interface` — the backend ABC + registry
-    * :mod:`smpc_gc.mock`      — mock/JSON problem loading
+    * :mod:`smpc_gc.mock`      — mock generation and JSON problem loading
 """
 
 from smpc_gc.types import CLEAR_TOKEN, RegionResult, ThresholdProblem
@@ -49,12 +43,7 @@ from smpc_gc.channel import (
     local_pair,
     open_channel,
 )
-from smpc_gc.interface import (
-    ThresholdBackend,
-    available_backends,
-    get_backend,
-    register_backend,
-)
+from smpc_gc.threshold import TECHNIQUE, evaluate_threshold
 
 __all__ = [
     "CLEAR_TOKEN",
@@ -67,8 +56,6 @@ __all__ = [
     "connect",
     "local_pair",
     "open_channel",
-    "ThresholdBackend",
-    "available_backends",
-    "get_backend",
-    "register_backend",
+    "TECHNIQUE",
+    "evaluate_threshold",
 ]

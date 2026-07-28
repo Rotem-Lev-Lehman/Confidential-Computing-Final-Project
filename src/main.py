@@ -5,8 +5,8 @@ Per-node entry point for the Secure COVID-19 Regional Quarantine Alert System.
 
 Each of the hospital nodes runs this file as its own process::
 
-    uv run python main.py --node-id 1 --records data/hospital1.txt
-    uv run python main.py --node-id 2 --records data/hospital2.txt
+    uv run python src/main.py --node-id 1 --records data/hospital1.txt
+    uv run python src/main.py --node-id 2 --records data/hospital2.txt
     ...
 
 or all of them at once with ``./run_all.sh``.
@@ -50,7 +50,7 @@ import sys
 import time
 from pathlib import Path
 
-from config_loader import CONFIG_PATH, Config, load_config
+from config_loader import CONFIG_PATH, load_config
 from gc_channel import make_channel_factory
 from gc_handoff import build_problem, region_ids_from_config, write_problem
 from node import Node
@@ -60,7 +60,7 @@ from sigma_handshake import load_signing_key
 from vectorize import vectorize
 
 
-def config_to_node_dict(config: Config) -> dict[int, dict]:
+def config_to_node_dict(config) -> dict[int, dict]:
     """
     Bridge the config_loader dataclass to the plain dict shape node.py expects.
 
@@ -94,42 +94,29 @@ def load_identity_key(node_id: int, key_path: str | None):
         print(
             f"ERROR: signing key not found at {path}\n"
             "Generate the identity keys and matching config first:\n"
-            "  uv run python demo_setup.py",
+            "  uv run python src/demo_setup.py",
             file=sys.stderr,
         )
         sys.exit(1)
     return load_signing_key(path)
 
 
-def make_backend(name: str, node: Node, peer_id: int, args, config: Config):
-    """Instantiate the 2PC engine for Phase 3.
+def run_phase3(problem, party: int, node: Node, peer_id: int, ot_group: str):
+    """Run the 2PC threshold evaluation over *our* encrypted transport.
 
-    ``yao`` is wired to run over *our* encrypted transport: it gets a
-    ``channel_factory`` and never learns it is talking over SIGMA + AES-GCM
-    instead of its own socket stub.  This is the swap point the whole design is
-    built around.
-
-    ``mpyc`` cannot be wired that way -- the framework brings its own networking
-    and its own (TLS-less) transport, and there is no hook to substitute ours.
-    It therefore opens a second, separate connection on its own port pair.  That
-    is an honest limitation of running someone else's framework, and a reason
-    the from-scratch engine is the primary deliverable; see THREAT_MODEL.md.
+    The GC engine is handed a ``channel_factory`` and never learns it is talking
+    over SIGMA + AES-GCM rather than a bare socket, so Phase 3's garbled tables
+    and OT values get exactly the same protection as Phase 1 and Phase 2 traffic.
     """
-    if name == "yao":
-        from smpc_gc.backends.yao_backend import YaoBackend
-        from smpc_gc.yao.ot import GROUPS
+    from smpc_gc.threshold import evaluate_threshold
+    from smpc_gc.yao.ot import GROUPS
 
-        return YaoBackend(
-            group=GROUPS[args.ot_group],
-            channel_factory=make_channel_factory(node, peer_id),
-        )
-
-    from smpc_gc.backends.mpyc_backend import MPyCBackend
-
-    # Both parties must derive the same rendezvous, so derive it from the
-    # public config rather than from a flag either side could set differently.
-    garbler = config.nodes[GARBLER_ID]
-    return MPyCBackend(host=garbler.host, port=args.mpyc_port)
+    return evaluate_threshold(
+        problem,
+        party=party,
+        group=GROUPS[ot_group],
+        channel_factory=make_channel_factory(node, peer_id),
+    )
 
 
 def print_alerts(results, regions: list[str], region_ids: list[int], threshold: int) -> None:
@@ -169,13 +156,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="seconds to wait for peers' listeners before connecting")
     parser.add_argument("--threshold", type=int, default=None,
                         help="quarantine threshold (default: the config's)")
-    parser.add_argument("--backend", default="yao", choices=("yao", "mpyc"),
-                        help="2PC engine for Phase 3 (default: yao, from scratch)")
     parser.add_argument("--ot-group", choices=("1024", "2048"), default="2048",
-                        help="MODP group for the Oblivious Transfer (yao only)")
-    parser.add_argument("--mpyc-port", type=int, default=9100,
-                        help="rendezvous port for the mpyc backend, which brings "
-                             "its own transport (uses this port and port+1)")
+                        help="MODP group for the Oblivious Transfer "
+                             "(default: 2048; 1024 is ~5x faster but weaker)")
     parser.add_argument("--show-shares", action="store_true",
                         help="DEMO ONLY: print this node's raw share of the global "
                              "vector. Individually meaningless (a share is uniform "
@@ -252,18 +235,12 @@ def main(argv: list[str] | None = None) -> int:
             out = write_problem(Path(args.gc_out) / f"node{me}" / f"problem_{'AB'[party]}.json", problem)
             print(f"[node {me}] WARNING (demo): wrote my share vector to {out}")
 
-        backend = make_backend(args.backend, node, peer_id, args, config)
-        transport = (
-            "our SIGMA-encrypted link"
-            if args.backend == "yao"
-            else f"mpyc's own transport on port {args.mpyc_port}"
-        )
         print(
-            f"[node {me}] Phase 3: running {backend.name} 2PC with node {peer_id} "
-            f"over {transport} ({len(region_ids)} regions, "
+            f"[node {me}] Phase 3: Yao's garbled circuits with node {peer_id} "
+            f"over our SIGMA-encrypted link ({len(region_ids)} regions, "
             f"{problem.bit_length}-bit shares)..."
         )
-        results = backend.evaluate(problem, party=party)
+        results = run_phase3(problem, party, node, peer_id, args.ot_group)
         print(f"[node {me}] Phase 3 done")
 
         if me == EVALUATOR_ID:

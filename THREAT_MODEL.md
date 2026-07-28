@@ -124,26 +124,27 @@ crosses the same protected channel.
 
 | Property | Mechanism | Where |
 |---|---|---|
-| Peer authentication | SIGMA sign-and-MAC, per-node Ed25519 identity keys | `sigma_handshake.py` |
-| Key agreement | Ephemeral X25519, HKDF-SHA256, transcript-bound | `sigma_handshake.py` |
-| Forward secrecy | DH keys discarded after the handshake | `sigma_handshake.py` |
-| Confidentiality + integrity | AES-256-GCM per directed link | `secure_channel.py` |
-| Replay / reorder resistance | Counter nonces + `sender→receiver#seq` as AAD, never transmitted | `secure_channel.py` |
-| Sender attribution | Messages carry the SIGMA-*authenticated* id, not a self-declared one | `node.py` |
-| Memory-exhaustion resistance | Length-prefixed frames, 8 MiB cap checked before allocation | `node.py` |
-| Liveness | Socket and collection timeouts; a dead peer raises, never hangs | `node.py` |
-| Session hygiene | One inbound session per peer; self-connections refused; connection cap | `node.py` |
+| Peer authentication | SIGMA sign-and-MAC, per-node Ed25519 identity keys | `src/sigma_handshake.py` |
+| Key agreement | Ephemeral X25519, HKDF-SHA256, transcript-bound | `src/sigma_handshake.py` |
+| Forward secrecy | DH keys discarded after the handshake | `src/sigma_handshake.py` |
+| Confidentiality + integrity | AES-256-GCM per directed link | `src/secure_channel.py` |
+| Replay / reorder resistance | Counter nonces + `sender→receiver#seq` as AAD, never transmitted | `src/secure_channel.py` |
+| Sender attribution | Messages carry the SIGMA-*authenticated* id, not a self-declared one | `src/node.py` |
+| Memory-exhaustion resistance | Length-prefixed frames, 8 MiB cap checked before allocation | `src/node.py` |
+| Liveness | Socket and collection timeouts; a dead peer raises, never hangs | `src/node.py` |
+| Session hygiene | One inbound session per peer; self-connections refused; connection cap | `src/node.py` |
 
 **There is no shared secret anywhere.** Each node holds its own private key; the
 public keys are in `config.json`. A valid signature proves *which* node is on the
 other end, not merely that it belongs to a group.
 
-**Exception — the MPyC backend.** MPyC brings its own networking and offers no
-hook to substitute ours, so `--backend mpyc` opens a second, unprotected
-connection on its own port pair. Only the `yao` backend — the project's actual
-cryptographic deliverable — runs over the channel above. This is an honest
-limitation of running someone else's framework and a good argument for the
-from-scratch engine.
+**This covers all three phases.** Phase 3's garbled tables and OT values travel
+over the same protected links as Phase 1 and Phase 2 traffic, because the 2PC
+engine takes its transport as a parameter (`src/gc_channel.py`). An earlier
+iteration also offered an MPyC engine, which could *not* be covered — MPyC brings
+its own networking with no hook to substitute ours, so it opened a second,
+unprotected connection. That was one of several reasons it was dropped; see
+`README.md`.
 
 ---
 
@@ -253,4 +254,4 @@ work; it changes performance, not the security argument.
 | Sub-threshold counts never revealed | Computational | Yao's GC + OT (RO model, CDH) |
 | Only the two parties can run Phase 3 | Computational | SIGMA authentication, Ed25519 |
 | Traffic cannot be read, forged, or replayed | Computational | AES-256-GCM, counter nonces, AAD |
-| Correct results | Verified | 166 tests, both backends agreeing on every problem |
+| Correct results | Verified | 156 tests, including the full pipeline as 4 OS processes |

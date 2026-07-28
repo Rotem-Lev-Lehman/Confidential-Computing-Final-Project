@@ -175,15 +175,6 @@ wheels = [
 ]
 
 [[package]]
-name = "mpyc"
-version = "0.11"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b1/52/ac798134d1cb26024be2f6000c9af27749ebed7b7245e86e15e1275ec89d/mpyc-0.11.tar.gz", hash = "sha256:7ddab524d0202a20a30c5459e248be722962f475077453c2cbc65dc6a2eed49c", size = 152343, upload-time = "2026-02-09T15:52:43.695Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ed/73/20bb0cb69fdaf1f0b3e8f73f41b3ab3c0897ca2c4c565761231128912ea8/mpyc-0.11-py3-none-any.whl", hash = "sha256:059ffa3396089ebb77beb43ea2f8040f2a20f3fc7ff6d3c839df3b3f3c28d38e", size = 130106, upload-time = "2026-02-09T15:52:42.111Z" },
-]
-
-[[package]]
 name = "packaging"
 version = "26.2"
 source = { registry = "https://pypi.org/simple" }
@@ -207,7 +198,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
-    { name = "mpyc" },
 ]
 
 [package.optional-dependencies]
@@ -218,7 +208,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=42" },
-    { name = "mpyc", specifier = ">=0.11" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
 ]
 provides-extras = ["dev"]

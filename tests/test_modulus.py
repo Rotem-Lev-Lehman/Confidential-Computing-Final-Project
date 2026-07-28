@@ -7,7 +7,7 @@ Phase 1's shares live in 𝔽ₚ, so ``A + B`` over the integers is either the t
 count or the true count plus ``p``.  The circuit resolves that with one
 conditional subtraction.  Getting this wrong is silent and catastrophic -- an
 over-threshold region would report as clear -- so both branches are tested
-directly, and both backends are checked to agree.
+directly, at the circuit level and end to end.
 """
 
 from __future__ import annotations
@@ -16,10 +16,12 @@ import random
 
 import pytest
 
-from smpc_gc import get_backend
-from smpc_gc.backends.yao_backend import YaoBackend
+from smpc_gc import evaluate_threshold
 from smpc_gc.types import ThresholdProblem
-from smpc_gc.yao import build_threshold_circuit, evaluate, garble
+# `evaluate` here is the *garbled circuit* evaluator, not the threshold entry
+# point -- imported under its qualified name to keep the two distinct.
+from smpc_gc.yao import build_threshold_circuit, garble
+from smpc_gc.yao.garbling import evaluate as evaluate_garbled
 from smpc_gc.yao.ot import GROUP_1024
 
 P = 1048573  # the configured modulus, 2**20 - 3
@@ -39,7 +41,7 @@ def _garble_eval(circuit, a_val: int, b_val: int) -> int:
     garbled, pairs = garble(circuit, _bits(a_val, circuit.garbler_input_wires))
     ev = _bits(b_val, circuit.evaluator_input_wires)
     labels = {w: pairs[w][ev[w]] for w in circuit.evaluator_input_wires}
-    return _to_int(evaluate(garbled, labels))
+    return _to_int(evaluate_garbled(garbled, labels))
 
 
 # --- the circuit ------------------------------------------------------------
@@ -137,7 +139,7 @@ def test_validate_rejects_a_modulus_wider_than_bit_length():
         problem.validate()
 
 
-# --- both backends ----------------------------------------------------------
+# --- end to end -------------------------------------------------------------
 
 
 def _modular_problem(seed: int, num_regions: int = 4) -> ThresholdProblem:
@@ -158,23 +160,38 @@ def _modular_problem(seed: int, num_regions: int = 4) -> ThresholdProblem:
 @pytest.mark.parametrize("seed", [1, 2, 3])
 def test_yao_matches_plaintext_on_modular_shares(seed):
     problem = _modular_problem(seed)
-    results = YaoBackend(group=GROUP_1024).evaluate(problem)
+    results = evaluate_threshold(problem, group=GROUP_1024)
     expected = problem.expected_plaintext()
     assert [r.revealed for r in results] == [e.revealed for e in expected]
 
 
-@pytest.mark.parametrize("seed", [1, 2, 3])
-def test_mpyc_matches_plaintext_on_modular_shares(seed):
-    problem = _modular_problem(seed)
-    results = get_backend("mpyc").evaluate(problem)
-    expected = problem.expected_plaintext()
-    assert [r.revealed for r in results] == [e.revealed for e in expected]
-
-
-def test_both_backends_agree_on_modular_shares():
-    """The swappable-engine claim, on the parameters the system actually uses."""
+def test_secure_result_equals_plaintext_on_the_real_parameters():
+    """End to end on the parameters the deployed system actually uses."""
     problem = _modular_problem(seed=7, num_regions=6)
-    yao = YaoBackend(group=GROUP_1024).evaluate(problem)
-    mpyc = get_backend("mpyc").evaluate(problem)
-    assert [r.revealed for r in yao] == [r.revealed for r in mpyc]
-    assert [r.crossed for r in yao] == [r.crossed for r in mpyc]
+    results = evaluate_threshold(problem, group=GROUP_1024)
+    expected = problem.expected_plaintext()
+    assert [r.revealed for r in results] == [e.revealed for e in expected]
+    assert [r.crossed for r in results] == [e.crossed for e in expected]
+
+
+def test_sub_threshold_regions_are_indistinguishable():
+    """0 cases and 49 cases must produce identical output -- the core guarantee."""
+    zero = _fixed_problem([0, 0])
+    forty_nine = _fixed_problem([0, 49])
+    r_zero = evaluate_threshold(zero, group=GROUP_1024)
+    r_49 = evaluate_threshold(forty_nine, group=GROUP_1024)
+    assert [r.revealed for r in r_zero] == [r.revealed for r in r_49] == [0, 0]
+
+
+def _fixed_problem(true_counts: list[int]) -> ThresholdProblem:
+    rng = random.Random(99)
+    a, b = [], []
+    for count in true_counts:
+        share_a = rng.randrange(P)
+        a.append(share_a)
+        b.append((count - share_a) % P)
+    return ThresholdProblem(
+        threshold=50,
+        region_ids=[1001 + j for j in range(len(true_counts))],
+        a_shares=a, b_shares=b, bit_length=BITS, modulus=P,
+    )

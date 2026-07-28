@@ -131,9 +131,9 @@ def test_json_shape_matches_what_load_problem_reads(tmp_path):
 
 
 @pytest.mark.slow
-def test_handoff_evaluates_correctly_on_the_real_backend():
+def test_handoff_evaluates_correctly_on_the_real_engine():
     """The full boundary: config parameters -> problem -> secure result."""
-    from smpc_gc.backends.yao_backend import YaoBackend
+    from smpc_gc import evaluate_threshold
     from smpc_gc.yao.ot import GROUP_1024
 
     node_ids = CONFIG.node_ids
@@ -147,6 +147,6 @@ def test_handoff_evaluates_correctly_on_the_real_backend():
     pb = build_problem(party=1, shares=B, region_ids=ids, threshold=50, p=CONFIG.p)
     merged = merge_problems(pa, pb)
 
-    results = YaoBackend(group=GROUP_1024).evaluate(merged)
+    results = evaluate_threshold(merged, group=GROUP_1024)
     assert [r.crossed for r in results] == [c > 50 for c in true]
     assert [r.revealed for r in results] == [ids[0], 0, 0, ids[3]]

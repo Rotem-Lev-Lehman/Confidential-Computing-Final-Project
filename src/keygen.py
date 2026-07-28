@@ -13,9 +13,12 @@ Each hospital node gets its own keypair:
 
 Usage::
 
-    python3 keygen.py                 # keys for nodes 1..4 from config.json
-    python3 keygen.py --nodes 1 2     # just these nodes
-    python3 keygen.py --out-dir keys  # where the private keys go
+    uv run python src/keygen.py                 # nodes 1..4 from config.json
+    uv run python src/keygen.py --nodes 1 2     # just these nodes
+    uv run python src/keygen.py --out-dir keys  # where the private keys go
+
+Most of the time you want ``src/demo_setup.py`` instead: it calls this and
+also writes the matching public keys into ``config.json``.
 
 Re-running overwrites existing keys, which invalidates every peer's copy of the
 corresponding public key -- so regenerate for all nodes together and update

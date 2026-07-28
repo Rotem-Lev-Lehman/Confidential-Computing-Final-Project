@@ -1,40 +1,35 @@
 """Command-line entry point for the threshold engine.
 
-One command, one set of flags, two interchangeable engines.  The default
-backend, ``yao``, is our from-scratch implementation of Yao's Garbled Circuits
-and Oblivious Transfer; ``mpyc`` runs the identical problem on the MPyC
-framework.  **Only** ``--backend`` **changes between them** — every other flag
-(problem input, ``--party``, ``--host``, ``--port``, output format) means the
-same thing for both, and each backend internally converts them to whatever its
-engine needs (e.g. MPyC's native ``-M/-I/-P`` flags).
+Evaluates the quarantine-threshold circuit
+``(A + B > threshold) ? region_id : Clear`` with Yao's Garbled Circuits and
+Oblivious Transfer, on mocked or file-loaded shares.  This exercises the 2PC
+layer on its own; ``main.py`` is what runs the complete four-node system.
 
-    # from-scratch Garbled Circuits + OT (default), mocked A/B, threshold 50
+    # mocked A/B, threshold 50, local simulation
     uv run smpc-gc
+    uv run smpc-gc --seed 3 --regions 12 --threshold 50
 
-    # the same problem on the MPyC framework — nothing else changes
-    uv run smpc-gc --backend mpyc
+    # faster (weaker) OT group, for a quick demo
+    uv run smpc-gc --ot-group 1024
 
 A genuine two-process 2PC run: each party loads a JSON problem holding **only
 its own** share vector and the parties rendezvous on ``host:port`` (start
-party 0 first — it waits for party 1).  Identical flags for every backend::
+party 0 first — it waits for party 1)::
 
-    uv run smpc-gc --backend yao  --input problem_A.json --party 0   # holds A
-    uv run smpc-gc --backend yao  --input problem_B.json --party 1   # holds B
-
-    uv run smpc-gc --backend mpyc --input problem_A.json --party 0   # holds A
-    uv run smpc-gc --backend mpyc --input problem_B.json --party 1   # holds B
+    uv run smpc-gc --input problems/1/problem_A.json --party 0   # holds A
+    uv run smpc-gc --input problems/1/problem_B.json --party 1   # holds B
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 
 from smpc_gc.channel import DEFAULT_HOST, DEFAULT_PORT
-from smpc_gc.interface import available_backends, get_backend
 from smpc_gc.mock import load_problem, make_mock_problem
+from smpc_gc.threshold import TECHNIQUE, evaluate_threshold
 from smpc_gc.types import RegionResult, ThresholdProblem
+from smpc_gc.yao.ot import GROUPS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,23 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="smpc-gc",
         description=(
             "Securely evaluate the quarantine-threshold circuit "
-            "(A + B > threshold ? region_id : Clear) on a pluggable SMPC backend."
+            "(A + B > threshold ? region_id : Clear) with Yao's Garbled "
+            "Circuits and Oblivious Transfer."
         ),
-    )
-    parser.add_argument(
-        "-b",
-        "--backend",
-        default="yao",
-        choices=available_backends(),
-        help=(
-            "engine to evaluate on: 'yao' (from-scratch Garbled Circuits + OT) "
-            "or 'mpyc' (default: yao); all other flags are backend-agnostic"
-        ),
-    )
-    parser.add_argument(
-        "--list-backends",
-        action="store_true",
-        help="list backends with their availability and exit",
     )
 
     src = parser.add_argument_group("problem input")
@@ -69,7 +50,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="load the problem (region ids + shares) from a JSON file",
     )
     src.add_argument(
-        "-t", "--threshold", type=int, default=50, help="quarantine threshold (mock mode)"
+        "-t", "--threshold", type=int, default=50,
+        help="quarantine threshold (mock mode)",
     )
     src.add_argument(
         "-m", "--regions", type=int, default=8, help="number of mock regions"
@@ -82,9 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--bit-length", type=int, default=16, help="secure integer bit width"
     )
 
-    run = parser.add_argument_group(
-        "run mode (identical for every backend)"
-    )
+    run = parser.add_argument_group("run mode")
     run.add_argument(
         "--party",
         type=int,
@@ -104,17 +84,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--port",
         type=int,
         default=DEFAULT_PORT,
-        help=(
-            "rendezvous TCP port for the two-process run (--party) "
-            f"(default: {DEFAULT_PORT}; mpyc also uses port+1)"
-        ),
+        help=f"rendezvous TCP port for the two-process run (default: {DEFAULT_PORT})",
     )
     run.add_argument(
-        "--json", action="store_true", help="emit results as JSON instead of a table"
-    )
-
-    yao = parser.add_argument_group("yao backend options")
-    yao.add_argument(
         "--ot-group",
         choices=("1024", "2048"),
         default="2048",
@@ -122,6 +94,9 @@ def build_parser() -> argparse.ArgumentParser:
             "MODP group size for the Oblivious Transfer "
             "(default: 2048; 1024 is ~5x faster but weaker)"
         ),
+    )
+    run.add_argument(
+        "--json", action="store_true", help="emit results as JSON instead of a table"
     )
     return parser
 
@@ -136,31 +111,6 @@ def _load_problem(args: argparse.Namespace) -> ThresholdProblem:
         max_count=args.max_count,
         bit_length=args.bit_length,
     )
-
-
-def _make_backend(args: argparse.Namespace):
-    """Instantiate the chosen backend from the *shared* CLI flags.
-
-    Every backend receives the same host/port rendezvous parameters and does
-    its own translation, so ``--backend`` is the only flag that differs
-    between engines.
-    """
-    if args.backend == "yao":
-        from smpc_gc.backends.yao_backend import YaoBackend
-        from smpc_gc.yao.ot import GROUPS
-
-        return YaoBackend(group=GROUPS[args.ot_group], host=args.host, port=args.port)
-    if args.backend == "mpyc":
-        from smpc_gc.backends.mpyc_backend import MPyCBackend
-
-        return MPyCBackend(host=args.host, port=args.port)
-    return get_backend(args.backend)
-
-
-def _print_backends() -> None:
-    print("Available backends:")
-    for name in available_backends():
-        print(f"  {get_backend(name).describe()}")
 
 
 def _render_table(
@@ -183,9 +133,7 @@ def _render_table(
     # Correctness self-check when both shares are known locally.
     expected = problem.expected_plaintext()
     if expected is not None and party is None:
-        match = all(
-            e.revealed == r.revealed for e, r in zip(expected, results)
-        )
+        match = all(e.revealed == r.revealed for e, r in zip(expected, results))
         lines.append(
             "Plaintext cross-check: "
             + ("OK (secure result == cleartext)" if match else "MISMATCH!")
@@ -194,29 +142,22 @@ def _render_table(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-
-    if args.list_backends:
-        _print_backends()
-        return 0
+    args = build_parser().parse_args(argv)
 
     problem = _load_problem(args)
-    backend = _make_backend(args)
-
-    ok, reason = backend.availability()
-    if not ok:
-        print(f"error: backend {args.backend!r} unavailable: {reason}", file=sys.stderr)
-        return 2
-
-    results = backend.evaluate(problem, party=args.party)
+    results = evaluate_threshold(
+        problem,
+        party=args.party,
+        group=GROUPS[args.ot_group],
+        host=args.host,
+        port=args.port,
+    )
 
     if args.json:
         print(
             json.dumps(
                 {
-                    "backend": backend.name,
-                    "technique": backend.technique,
+                    "technique": TECHNIQUE,
                     "threshold": problem.threshold,
                     "party": args.party,
                     "results": [r.as_dict() for r in results],
@@ -225,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
     else:
-        print(f"Backend: {backend.name} — {backend.technique}")
+        print(f"Engine: {TECHNIQUE}")
         if args.party is not None:
             print(f"Running as party {args.party}")
         print(_render_table(problem, results, args.party))

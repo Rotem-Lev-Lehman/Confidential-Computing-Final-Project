@@ -1,10 +1,9 @@
 """The shared message-passing transport between the two parties.
 
-This module is a **backend-agnostic, shared resource**: any backend (or other
-component) that needs to move messages between party 0 and party 1 depends on
-the :class:`Channel` protocol defined here — never on sockets directly.  The
-two parties run in **separate processes** and never share memory; every value
-one needs from the other crosses a ``Channel``.
+The 2PC protocol never touches sockets directly: everything that moves between
+party 0 and party 1 goes through the :class:`Channel` protocol defined here.
+The two parties run in **separate processes** and never share memory; every
+value one needs from the other crosses a ``Channel``.
 
 This module ships a simple, self-contained socket implementation so the two
 parties can talk out of the box.  It is deliberately a thin placeholder: the
@@ -12,8 +11,9 @@ project's networking layer (Student A's P2P / secure-summation transport) can
 replace it by providing any object with the same ``send(obj)`` / ``recv()`` /
 ``close()`` interface — nothing else in the project has to change.
 :func:`open_channel` is the single integration point: swap its body (or inject
-a different factory into a backend) to run the whole engine on another
-transport.
+a different factory to ``evaluate_threshold``) to run the whole engine on
+another transport -- which is exactly how the system carries 2PC traffic over
+its SIGMA-authenticated, AES-GCM-encrypted mesh.
 
 Wire format: each message is a JSON object, length-prefixed with a 4-byte
 big-endian byte count.  JSON keeps the transcript human-inspectable and handles
@@ -32,8 +32,7 @@ from typing import Any, Callable, Protocol, runtime_checkable
 _LENGTH_BYTES = 4
 
 #: Default rendezvous address for a two-process run (party 0 binds, party 1
-#: connects).  Shared by every backend so the CLI flags mean the same thing
-#: regardless of ``--backend``.
+#: connects).
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9000
 
@@ -155,7 +154,7 @@ def open_channel(
 
     Party 0 binds ``host:port`` and waits for the peer; party 1 connects to it.
     This is the **single swap point** for the transport: replace this factory
-    (or pass a custom :data:`ChannelFactory` to a backend) to carry the
+    (or pass a custom :data:`ChannelFactory` to ``evaluate_threshold``) to carry the
     protocol over the project's real networking layer instead of the built-in
     socket stub.
     """

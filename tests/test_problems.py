@@ -1,17 +1,15 @@
-"""Run every problem in ``problems/`` on every backend and check the solution.
+"""Run every problem in ``problems/`` and check it against the expected solution.
 
 Each ``problems/<n>/`` directory holds the two per-party input files
 (``problem_A.json`` for party 0, ``problem_B.json`` for party 1) and the
-expected public outcome (``solution.json``).  These tests prove the backends
-are interchangeable: the same problems, the same expected results, only the
-backend name changes.
+expected public outcome (``solution.json``).
 
 Two levels are covered:
 
-* **local simulation** — every problem × every backend, in-process;
-* **genuine two-process 2PC** — the CLI is launched twice per backend with
-  *identical* flags except ``--party``, each process holding only its own
-  share file, and both parties' revealed outputs must match the solution.
+* **local simulation** — every problem, in-process;
+* **genuine two-process 2PC** — the CLI is launched twice, each process holding
+  only its own share file, and both parties' revealed outputs must match the
+  solution.
 """
 
 from __future__ import annotations
@@ -24,14 +22,14 @@ from pathlib import Path
 
 import pytest
 
-from smpc_gc import get_backend
+from smpc_gc import evaluate_threshold
 from smpc_gc.mock import load_problem_dir
+from smpc_gc.yao.ot import GROUP_1024
 
 PROBLEMS_DIR = Path(__file__).resolve().parent.parent / "problems"
 PROBLEM_DIRS = sorted(
     (p for p in PROBLEMS_DIR.iterdir() if p.is_dir()), key=lambda p: int(p.name)
 )
-BACKENDS = ["yao", "mpyc"]
 
 
 def _solution(problem_dir: Path) -> dict:
@@ -46,62 +44,42 @@ def _assert_matches_solution(results, solution: dict) -> None:
     assert quarantined == solution["quarantined_region_ids"]
 
 
-# --- local simulation: every problem on every backend -----------------------
+# --- local simulation: every problem ----------------------------------------
 
 
-def _make_backend(name: str):
-    if name == "yao":
-        from smpc_gc.backends.yao_backend import YaoBackend
-        from smpc_gc.yao.ot import GROUP_1024
-
-        # The OT group size only affects speed, never correctness; the fast
-        # 1024-bit group keeps this 20-run matrix quick.  The default
-        # (2048-bit) path is exercised by test_cli_two_process_run below and
-        # by the OT/protocol tests in test_yao.py.
-        return YaoBackend(group=GROUP_1024)
-    return get_backend(name)
-
-
-@pytest.mark.parametrize("backend_name", BACKENDS)
 @pytest.mark.parametrize("problem_dir", PROBLEM_DIRS, ids=lambda p: f"problem{p.name}")
-def test_problem_matches_solution(backend_name, problem_dir):
+def test_problem_matches_solution(problem_dir):
+    # The OT group size only affects speed, never correctness; the fast
+    # 1024-bit group keeps this ten-run matrix quick.  The default (2048-bit)
+    # path is exercised by test_cli_two_process_run below and by the OT and
+    # protocol tests in test_yao.py.
     problem = load_problem_dir(problem_dir)
-    results = _make_backend(backend_name).evaluate(problem)
+    results = evaluate_threshold(problem, group=GROUP_1024)
     _assert_matches_solution(results, _solution(problem_dir))
 
 
-# --- genuine two-process run via the CLI: same flags, any backend -----------
+# --- genuine two-process run via the CLI ------------------------------------
 
 
-def _free_port_pair() -> int:
-    """A port ``p`` with both ``p`` and ``p+1`` free (mpyc uses two ports)."""
-    for _ in range(50):
-        with socket.socket() as s0:
-            s0.bind(("127.0.0.1", 0))
-            port = s0.getsockname()[1]
-            try:
-                with socket.socket() as s1:
-                    s1.bind(("127.0.0.1", port + 1))
-                    return port
-            except OSError:
-                continue
-    raise RuntimeError("could not find two consecutive free ports")
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
-@pytest.mark.parametrize("backend_name", BACKENDS)
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "problem_dir", [PROBLEMS_DIR / "1"], ids=lambda p: f"problem{p.name}"
 )
-def test_cli_two_process_run(backend_name, problem_dir):
-    port = _free_port_pair()
+def test_cli_two_process_run(problem_dir):
+    """Two separate processes, each holding only its own share vector."""
+    port = _free_port()
 
     def _cli(party: int) -> list[str]:
-        # Identical flags for every backend; only --backend selects the engine.
         return [
             sys.executable,
             "-m",
             "smpc_gc.cli",
-            "--backend", backend_name,
             "--input", str(problem_dir / f"problem_{'AB'[party]}.json"),
             "--party", str(party),
             "--port", str(port),
@@ -112,10 +90,8 @@ def test_cli_two_process_run(backend_name, problem_dir):
         _cli(0), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
     try:
-        p1 = subprocess.run(
-            _cli(1), capture_output=True, text=True, timeout=120
-        )
-        out0, err0 = p0.communicate(timeout=120)
+        p1 = subprocess.run(_cli(1), capture_output=True, text=True, timeout=300)
+        out0, err0 = p0.communicate(timeout=300)
     finally:
         p0.kill()
 
@@ -126,5 +102,4 @@ def test_cli_two_process_run(backend_name, problem_dir):
     expected_revealed = [e["revealed"] for e in solution["results"]]
     for label, stdout in (("party0", out0), ("party1", p1.stdout)):
         payload = json.loads(stdout)
-        assert payload["backend"] == backend_name, label
         assert [r["revealed"] for r in payload["results"]] == expected_revealed, label

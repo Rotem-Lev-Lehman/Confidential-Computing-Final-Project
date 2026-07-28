@@ -38,7 +38,7 @@ class ThresholdProblem:
         ``modulus`` is how the finite field of the secure-summation layer is
         carried across this boundary.  When it is set, ``a_shares`` and
         ``b_shares`` are additive shares over 𝔽_modulus, so they reconstruct
-        the true count only modulo ``modulus``, and the backend reduces
+        the true count only modulo ``modulus``, and the circuit reduces
         ``A + B`` accordingly before comparing.  When it is ``None`` the shares
         are assumed to reconstruct directly over the integers — the simpler
         setting used by the mocked problems in ``problems/``.
@@ -65,7 +65,7 @@ class ThresholdProblem:
         """Return the share vector this party contributes as a sender.
 
         ``party is None`` (local simulation) contributes both vectors and is
-        handled by the backend directly; this helper returns the A-vector.
+        handled by the caller directly; this helper returns the A-vector.
         """
         if party is None or party == 0:
             return self.a_shares
@@ -74,7 +74,7 @@ class ThresholdProblem:
         raise ValueError(f"party must be 0, 1 or None, got {party!r}")
 
     def validate(self, *, party: int | None = None) -> None:
-        """Sanity-check the problem before handing it to a backend."""
+        """Sanity-check the problem before handing it to the engine."""
         if self.num_regions == 0:
             raise ValueError("problem has no regions")
         if self.bit_length < 2:
@@ -115,7 +115,7 @@ class ThresholdProblem:
     def expected_plaintext(self) -> list[RegionResult] | None:
         """Compute the result in the clear, if both share vectors are known.
 
-        Used for verifying backend correctness; returns ``None`` when a share
+        Used for verifying the secure result; returns ``None`` when a share
         vector is missing (as in a genuine distributed run).
         """
         if self.a_shares is None or self.b_shares is None:

@@ -21,7 +21,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-CONFIG_PATH = Path(__file__).parent / "config.json"
+# The code lives in src/; the config is deployment data and stays at the repo
+# root, where an operator expects to find and edit it.
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 
 #: Length of a raw Ed25519 public key, in hex characters.
 _PUBLIC_KEY_HEX_LEN = 64

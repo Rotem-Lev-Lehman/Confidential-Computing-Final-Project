@@ -44,10 +44,10 @@ records. Re-run with `--seed N` for a different scenario, or delete `keys/` and
 Other ways in:
 
 ```bash
-./run_all.sh --backend mpyc            # same computation, different SMPC engine
-uv run python main.py --node-id 1 --records data/hospital1.txt   # one node
-uv run smpc-gc                          # the 2PC threshold layer on its own
-uv run smpc-gc --list-backends
+./run_all.sh --ot-group 1024                # ~5x faster, weaker group, quick demo
+./run_all.sh --show-shares                  # also print each node's raw share
+uv run python src/main.py --node-id 1 --records data/hospital1.txt   # one node
+uv run smpc-gc                              # the 2PC threshold layer on its own
 ```
 
 ---
@@ -103,38 +103,38 @@ would be: 20-bit shares instead of 47, so 20 base OTs per region instead of 47
 
 ## Layout
 
-| Path | Role | Phase |
-|---|---|---|
-| `main.py` | per-node entry point; runs all three phases | all |
-| `config.json` / `config_loader.py` | public config + strict validation | — |
-| `keygen.py` / `demo_setup.py` | identity keys, demo scenario | — |
-| `sigma_handshake.py` | SIGMA AKE, per-node Ed25519 identities | transport |
-| `secure_channel.py` | AES-256-GCM, counter nonces, AAD | transport |
-| `node.py` | P2P mesh, framing, authenticated delivery | transport |
-| `vectorize.py` | records → histogram vector | 1 |
-| `secret_sharing.py` | additive sharing over 𝔽ₚ | 1 |
-| `secure_sum.py` | the distributed secure sum | 1 |
-| `share_reduction.py` | 4 nodes → 2 parties | 2 |
-| `gc_handoff.py` | the Phase 2 → Phase 3 interface boundary | 2→3 |
-| `gc_channel.py` | adapter: run the GC over our transport | 3 |
-| `smpc_gc/` | the 2PC threshold engine (below) | 3 |
+All Python lives under `src/`; everything beside it is data, docs or tooling.
 
 ```
-smpc_gc/
-  yao/                        # ★ from-scratch Yao's GC + OT (core deliverable)
-    circuit.py                #   A+B>threshold, with optional mod-p reduction
-    garbling.py               #   free-XOR + point-and-permute garbling
-    ot.py                     #   Chou-Orlandi 1-out-of-2 Oblivious Transfer
-    protocol.py               #   split Garbler / Evaluator halves
-  channel.py                  # transport contract + socket implementation
-  types.py                    # ThresholdProblem / RegionResult
-  interface.py                # ThresholdBackend ABC + registry
-  backends/yao_backend.py     # adapter for the from-scratch engine
-  backends/mpyc_backend.py    # MPyC adapter
-  mock.py, cli.py             # mock/JSON problems, the `smpc-gc` command
+src/
+  main.py                     # per-node entry point; runs all three phases
+  demo_setup.py, keygen.py    # identity keys + demo scenario
+  config_loader.py            # public config + strict validation
+  sigma_handshake.py          # SIGMA AKE, per-node Ed25519 identities   [transport]
+  secure_channel.py           # AES-256-GCM, counter nonces, AAD         [transport]
+  node.py                     # P2P mesh, framing, authenticated delivery[transport]
+  vectorize.py                # records -> histogram vector              [phase 1]
+  secret_sharing.py           # additive sharing over F_p                [phase 1]
+  secure_sum.py               # the distributed secure sum               [phase 1]
+  share_reduction.py          # 4 nodes -> 2 parties                     [phase 2]
+  gc_handoff.py               # the Phase 2 -> Phase 3 boundary          [phase 2/3]
+  gc_channel.py               # adapter: run the GC over our transport   [phase 3]
+  smpc_gc/                    # the 2PC threshold engine                 [phase 3]
+    yao/                      #   ★ from-scratch Yao's GC + OT
+      circuit.py              #     A+B>threshold, with mod-p reduction
+      garbling.py             #     free-XOR + point-and-permute garbling
+      ot.py                   #     Chou-Orlandi 1-out-of-2 Oblivious Transfer
+      protocol.py             #     split Garbler / Evaluator halves
+    threshold.py              #   evaluate_threshold(): one circuit per region
+    channel.py                #   transport contract + socket implementation
+    types.py                  #   ThresholdProblem / RegionResult
+    mock.py, cli.py           #   mock/JSON problems, the `smpc-gc` command
+
+config.json                   # public config (regions, field, node addresses)
 problems/                     # ten problem instances + expected solutions
-experiments/                  # backend-comparison harness -> report.md
-tests/                        # 166 tests
+experiments/                  # performance harness -> report.md
+tests/                        # 156 tests
+run_all.sh                    # launch the whole demo
 ```
 
 ---
@@ -162,36 +162,51 @@ They meet at exactly two seams, both of which are covered by tests:
 
 ## From-scratch cryptography
 
-No SMPC library is involved in the `yao` backend:
+No SMPC library is involved. The one runtime dependency, `cryptography`, supplies
+only the standard primitives *around* the protocol (Ed25519, X25519, HKDF,
+AES-GCM). The secure computation itself is built on `hashlib`, `secrets` and
+`socket`:
 
 | File | What it implements |
 |---|---|
-| `smpc_gc/yao/circuit.py` | ripple-carry adder → conditional mod-p subtraction → comparator → multiplexer, reduced to `XOR`/`AND` |
-| `smpc_gc/yao/garbling.py` | free-XOR + point-and-permute, garbled AND tables, output decoding |
-| `smpc_gc/yao/ot.py` | 1-out-of-2 Oblivious Transfer (Chou–Orlandi) over MODP |
-| `smpc_gc/yao/protocol.py` | the Garbler / Evaluator halves |
+| `src/smpc_gc/yao/circuit.py` | ripple-carry adder → conditional mod-p subtraction → comparator → multiplexer, reduced to `XOR`/`AND` |
+| `src/smpc_gc/yao/garbling.py` | free-XOR + point-and-permute, garbled AND tables, output decoding |
+| `src/smpc_gc/yao/ot.py` | 1-out-of-2 Oblivious Transfer (Chou–Orlandi) over MODP |
+| `src/smpc_gc/yao/protocol.py` | the Garbler / Evaluator halves |
 
 The garbler holds `A`, the evaluator holds `B` and fetches its input-wire labels
 by OT. The two halves never co-hold secret bits — even the local simulation
 drives them against each other over a real socket pair.
 
-### Swappable backends
+### Why there is only one engine (and what happened to MPyC)
 
-Every engine sits behind `ThresholdBackend`, and every CLI flag means the same
-thing for every engine — switching is *only* `--backend`:
+An earlier iteration put the evaluation behind a pluggable `ThresholdBackend`
+interface and added [MPyC](https://github.com/lschoe/mpyc) as a second engine, to
+compare our implementation against an established framework. **We evaluated it,
+found it unsuitable, and removed it.** Two reasons, in order of importance:
 
-| `--backend` | Engine | Technique |
-|---|---|---|
-| `yao` (default) | this repo | Yao's Garbled Circuits + OT, from scratch |
-| `mpyc` | [MPyC](https://github.com/lschoe/mpyc) | honest-majority Shamir secret sharing |
+1. **MPyC does not implement Yao's Garbled Circuits.** It is *honest-majority
+   Shamir secret sharing* over arithmetic circuits — a different primitive
+   entirely. Benchmarking it against this engine compares two unrelated
+   techniques, which is not the comparison this project is about.
 
-`tests/test_problems.py` and `tests/test_modulus.py` check that both engines
-produce identical results on every problem, including the real 4-node
-parameters. Adding an engine is a new subclass registered in
-`smpc_gc/interface.py`.
+2. **In the two-party setting it provides no input privacy at all.**
+   Honest-majority Shamir requires `t < m/2`. With `m = 2` parties MPyC runs at
+   threshold `t = 0`, and a degree-0 sharing polynomial is the constant
+   `f(X) = secret` — so the "share" *is* the secret. We confirmed this
+   experimentally before dropping it: party 1 read party 0's private input
+   verbatim from its own share. Yao's protocol is what `proposal.md` specifies
+   precisely because it *is* secure for two parties.
 
-Note that MPyC brings its own networking, so `--backend mpyc` does **not** run
-over our encrypted channel — see [`THREAT_MODEL.md`](THREAT_MODEL.md) §4.
+MPyC would be sound for a *different* architecture: one 4-party session across
+all four hospitals, skipping the reduction to two parties entirely, where
+`t = 1` and no single hospital learns anything. That is a legitimate alternative
+design — but it is not a drop-in engine for the proposal's hybrid pipeline.
+
+With one engine left, the backend abstraction and its registry were pure
+indirection, so they went too. `smpc_gc.threshold.evaluate_threshold` is called
+directly. The `Channel` seam remains — that one earns its keep, since it is what
+lets the 2PC run over the SIGMA-encrypted mesh instead of a bare socket.
 
 ---
 
@@ -210,21 +225,24 @@ uv run pytest -m "not slow"   # skip the multi-process and 2048-bit runs
 | `test_node_transport.py` | replay/reorder rejection, frame limits, duplicate contributions, timeouts |
 | `test_config_loader.py` | every config invariant, including primality and field sizing |
 | `test_yao.py` | OT (both groups + validation), garbling, the protocol |
-| `test_modulus.py` | modular reconstruction, both wrap branches, both backends |
+| `test_modulus.py` | modular reconstruction, both wrap branches, end to end |
 | `test_gc_handoff.py` | the Phase 2→3 schema round-trip on real parameters |
 | `test_gc_channel.py` | the GC engine running over the encrypted mesh |
-| `test_problems.py` | every problem in `problems/` on every backend |
+| `test_threshold.py` | problem semantics, validation, JSON round-trip |
+| `test_problems.py` | every problem in `problems/`, plus a two-process CLI run |
 | `test_end_to_end.py` | the whole system as 4 OS processes, alert list vs ground truth |
 
 ---
 
 ## Experiments
 
-`experiments/run_experiments.py` benchmarks the backends against each other.
-Every timed run is a genuine two-process 2PC session.
+`experiments/run_experiments.py` measures the engine: correctness on every
+problem, wall-clock scaling with regions / share width / OT group, the fixed
+protocol overhead, bytes on the wire, and implementation footprint. Every timed
+run is a genuine two-process 2PC session.
 
 ```bash
-uv run python experiments/run_experiments.py            # full (~4 min)
+uv run python experiments/run_experiments.py            # full (~3 min)
 uv run python experiments/run_experiments.py --quick    # subset (~1 min)
 ```
 

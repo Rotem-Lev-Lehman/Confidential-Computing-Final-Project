@@ -6,8 +6,7 @@ import threading
 
 import pytest
 
-from smpc_gc import get_backend
-from smpc_gc.backends.yao_backend import YaoBackend
+from smpc_gc import evaluate_threshold
 from smpc_gc.channel import Listener, local_pair
 from smpc_gc.types import CLEAR_TOKEN, ThresholdProblem
 from smpc_gc.yao import (
@@ -137,11 +136,10 @@ def test_run_yao_2pc_boundary_cases():
         assert _to_int(out) == expected
 
 
-# --- backend integration ----------------------------------------------------
+# --- the per-region driver --------------------------------------------------
 
 
-def test_yao_backend_matches_plaintext():
-    backend = get_backend("yao")
+def test_evaluate_threshold_matches_plaintext():
     problem = ThresholdProblem(
         threshold=50,
         region_ids=[1001, 1002, 1003, 1004],
@@ -149,18 +147,17 @@ def test_yao_backend_matches_plaintext():
         b_shares=[25, 25, 0, 100],  # sums: 51(>), 50(=), 0, 200(>)
         bit_length=8,
     )
-    results = backend.evaluate(problem)
+    results = evaluate_threshold(problem)
     assert [r.revealed for r in results] == [1001, CLEAR_TOKEN, CLEAR_TOKEN, 1004]
     assert [r.crossed for r in results] == [True, False, False, True]
 
 
-def test_yao_backend_rejects_share_overflow():
-    backend = get_backend("yao")
+def test_evaluate_threshold_rejects_share_overflow():
     problem = ThresholdProblem(
         threshold=50, region_ids=[1001], a_shares=[999], b_shares=[1], bit_length=4
     )
     with pytest.raises(ValueError):
-        backend.evaluate(problem)
+        evaluate_threshold(problem)
 
 
 # --- split garbler / evaluator over a channel -------------------------------
@@ -209,7 +206,7 @@ def test_garbler_and_evaluator_run_over_a_channel():
     assert box["g"] == ev_out  # both parties learn the same public result
 
 
-def test_yao_backend_two_process_distributed_run():
+def test_two_process_distributed_run():
     # Party 0 (garbler) holds only A, party 1 (evaluator) holds only B; they
     # meet on a real socket on an ephemeral port.
     region_ids = [1001, 1002, 1003, 1004]
@@ -239,11 +236,10 @@ def test_yao_backend_two_process_distributed_run():
     t = threading.Thread(target=_garbler)
     t.start()
     try:
-        evaluator = YaoBackend(port=port)
         evaluator_problem = ThresholdProblem(
             threshold=50, region_ids=region_ids, b_shares=b_shares, bit_length=8
         )
-        results = evaluator._run_distributed(evaluator_problem, party=1)
+        results = evaluate_threshold(evaluator_problem, party=1, port=port)
     finally:
         t.join()
 

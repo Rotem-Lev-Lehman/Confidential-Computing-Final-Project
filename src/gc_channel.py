@@ -75,7 +75,7 @@ class NodeChannel:
         Raises:
             ConnectionError: if nothing arrives in time -- the peer most likely
                 died mid-session.  This matches the error the GC layer's own
-                socket channel raises, so the backend needs no special case.
+                socket channel raises, so the engine needs no special case.
         """
         if self._closed:
             raise ConnectionError("channel is closed")
@@ -105,16 +105,18 @@ class NodeChannel:
 
 
 def make_channel_factory(node, peer_id: int, recv_timeout: float | None = None):
-    """Build a ``ChannelFactory`` for the GC backend.
+    """Build a ``ChannelFactory`` for the GC engine.
 
-    ``smpc_gc``'s backends call ``channel_factory(party)`` to obtain their
-    channel.  Our channel does not depend on the party number -- the peer is
-    already fixed by ``peer_id`` -- so the argument is accepted and ignored.
+    ``evaluate_threshold`` calls ``channel_factory(party)`` to obtain its
+    channel.  Ours does not depend on the party number -- the peer is already
+    fixed by ``peer_id`` -- so the argument is accepted and ignored.
 
     Usage::
 
-        backend = YaoBackend(channel_factory=make_channel_factory(node, peer_id))
-        results = backend.evaluate(problem, party=party)
+        results = evaluate_threshold(
+            problem, party=party,
+            channel_factory=make_channel_factory(node, peer_id),
+        )
     """
 
     def factory(_party: int) -> NodeChannel:

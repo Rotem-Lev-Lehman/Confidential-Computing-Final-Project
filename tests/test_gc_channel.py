@@ -61,7 +61,7 @@ def test_recv_unwraps_the_payload():
 
 
 def test_recv_translates_a_transport_timeout_into_connectionerror():
-    """The GC backend only knows about ConnectionError, so we translate."""
+    """The GC engine only knows about ConnectionError, so we translate."""
     channel = NodeChannel(_FakeNode(), peer_id=2)
     with pytest.raises(ConnectionError):
         channel.recv()
@@ -87,12 +87,12 @@ def test_factory_ignores_the_party_argument():
 
 
 def test_yao_over_encrypted_transport():
-    """Run the YaoBackend across two real SIGMA-authenticated nodes."""
+    """Run the 2PC engine across two real SIGMA-authenticated nodes."""
     from gc_handoff import build_problem
     from node import Node
     from secure_sum import compute_local_shares, local_sum
     from share_reduction import consolidate
-    from smpc_gc.backends.yao_backend import YaoBackend
+    from smpc_gc import evaluate_threshold
     from smpc_gc.yao.ot import GROUP_1024
 
     p = 1048573
@@ -136,11 +136,12 @@ def test_yao_over_encrypted_transport():
                     party=party, shares=shares, region_ids=region_ids,
                     threshold=50, p=p,
                 )
-                backend = YaoBackend(
+                results[party] = evaluate_threshold(
+                    problem,
+                    party=party,
                     group=GROUP_1024,
                     channel_factory=make_channel_factory(node, peer_id),
                 )
-                results[party] = backend.evaluate(problem, party=party)
             except BaseException as exc:  # surfaced on the main thread below
                 errors.append(exc)
 

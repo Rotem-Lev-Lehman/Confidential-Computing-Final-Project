@@ -25,26 +25,20 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 THRESHOLD = 50
 
-#: Root modules and packages a node process needs in its working directory.
-_SOURCES = [
-    "main.py", "demo_setup.py", "keygen.py", "config.json", "config_loader.py",
-    "node.py", "secure_channel.py", "secure_sum.py", "secret_sharing.py",
-    "share_reduction.py", "sigma_handshake.py", "vectorize.py",
-    "gc_channel.py", "gc_handoff.py", "smpc_gc",
-]
-
-
 def _isolated_workspace(tmp_path: Path, base_port: int) -> Path:
     """A throwaway copy of the project, on its own ports.
 
-    Copied rather than run in place because ``demo_setup.py`` rewrites
-    ``config.json`` with freshly generated public keys.
+    Mirrors the real layout -- ``src/`` for the code, ``config.json`` at the
+    root beside it -- because ``config_loader`` resolves the config relative to
+    its own location.  Copied rather than run in place because
+    ``demo_setup.py`` rewrites ``config.json`` with freshly generated keys.
     """
     work = tmp_path / "run"
     work.mkdir()
-    for name in _SOURCES:
-        src = ROOT / name
-        (shutil.copytree if src.is_dir() else shutil.copy)(src, work / name)
+    shutil.copytree(
+        ROOT / "src", work / "src", ignore=shutil.ignore_patterns("__pycache__")
+    )
+    shutil.copy(ROOT / "config.json", work / "config.json")
 
     config = json.loads((work / "config.json").read_text())
     for offset, node_id in enumerate(sorted(config["nodes"], key=int)):
@@ -76,7 +70,7 @@ def _launch_pipeline(work: Path, extra: list[str], timeout: float) -> dict[int, 
     node_ids = sorted(int(n) for n in config["nodes"])
     procs = {
         nid: subprocess.Popen(
-            [sys.executable, "-u", "main.py", "--node-id", str(nid),
+            [sys.executable, "-u", "src/main.py", "--node-id", str(nid),
              "--records", f"data/hospital{nid}.txt", "--connect-delay", "2.0",
              *extra],
             cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -96,6 +90,24 @@ def _launch_pipeline(work: Path, extra: list[str], timeout: float) -> dict[int, 
     return outputs
 
 
+def _clone_prepared(workspace: Path, tmp_path: Path, base_port: int) -> Path:
+    """A fresh workspace on its own ports, reusing the prepared keys and records.
+
+    Re-running ``demo_setup.py`` per test would be slow and would generate a
+    different scenario; copying the prepared keys means the public keys in the
+    config must be copied across with them or nothing authenticates.
+    """
+    work = _isolated_workspace(tmp_path, base_port)
+    shutil.copytree(workspace / "keys", work / "keys")
+    shutil.copytree(workspace / "data", work / "data")
+    prepared = json.loads((workspace / "config.json").read_text())
+    target = json.loads((work / "config.json").read_text())
+    for node_id, node in prepared["nodes"].items():
+        target["nodes"][node_id]["public_key"] = node["public_key"]
+    (work / "config.json").write_text(json.dumps(target, indent=2))
+    return work
+
+
 def _quarantined_from_output(stdout: str) -> set[str]:
     """Parse the alert table node 2 prints."""
     return {
@@ -111,7 +123,7 @@ def workspace(tmp_path_factory):
     # Seed 1 is chosen so the 4-region scenario straddles the threshold (91,
     # 26, 33, 51) -- including a region one case over it.  A run that was all
     # clear or all quarantine would demonstrate nothing.
-    setup = _run(work, ["demo_setup.py", "--seed", "1", "--threshold",
+    setup = _run(work, ["src/demo_setup.py", "--seed", "1", "--threshold",
                         str(THRESHOLD)], timeout=120)
     assert setup.returncode == 0, f"demo_setup failed:\n{setup.stdout}{setup.stderr}"
     return work
@@ -145,20 +157,10 @@ def test_scenario_straddles_the_threshold(workspace):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("backend", ["yao", "mpyc"])
-def test_pipeline_publishes_the_correct_alert_list(workspace, backend, tmp_path):
-    work = _isolated_workspace(tmp_path, base_port=9711 if backend == "yao" else 9721)
-    shutil.copytree(workspace / "keys", work / "keys")
-    shutil.copytree(workspace / "data", work / "data")
-    config = json.loads((workspace / "config.json").read_text())
+def test_pipeline_publishes_the_correct_alert_list(workspace, tmp_path):
+    work = _clone_prepared(workspace, tmp_path, base_port=9711)
+    outputs = _launch_pipeline(work, ["--ot-group", "1024"], timeout=600)
     target = json.loads((work / "config.json").read_text())
-    for node_id, node in config["nodes"].items():
-        target["nodes"][node_id]["public_key"] = node["public_key"]
-    (work / "config.json").write_text(json.dumps(target, indent=2))
-
-    extra = ["--backend", backend, "--ot-group", "1024",
-             "--mpyc-port", "9761" if backend == "mpyc" else "9771"]
-    outputs = _launch_pipeline(work, extra, timeout=600)
 
     regions = target["regions"]
     totals = _true_totals(work, regions)
@@ -182,15 +184,8 @@ def test_sub_threshold_counts_never_appear_in_the_output(workspace, tmp_path):
     ``region_id`` or ``Clear`` at a public index -- but its case count must
     never surface anywhere.
     """
-    work = _isolated_workspace(tmp_path, base_port=9731)
-    shutil.copytree(workspace / "keys", work / "keys")
-    shutil.copytree(workspace / "data", work / "data")
-    config = json.loads((workspace / "config.json").read_text())
+    work = _clone_prepared(workspace, tmp_path, base_port=9731)
     target = json.loads((work / "config.json").read_text())
-    for node_id, node in config["nodes"].items():
-        target["nodes"][node_id]["public_key"] = node["public_key"]
-    (work / "config.json").write_text(json.dumps(target, indent=2))
-
     outputs = _launch_pipeline(work, ["--ot-group", "1024"], timeout=600)
     published = "\n".join(outputs.values())
 
@@ -213,15 +208,7 @@ def test_sub_threshold_counts_never_appear_in_the_output(workspace, tmp_path):
 @pytest.mark.slow
 def test_gc_out_is_off_by_default_but_protected_when_asked(workspace, tmp_path):
     """The demo dump is opt-in, per-node, and owner-readable only."""
-    work = _isolated_workspace(tmp_path, base_port=9741)
-    shutil.copytree(workspace / "keys", work / "keys")
-    shutil.copytree(workspace / "data", work / "data")
-    config = json.loads((workspace / "config.json").read_text())
-    target = json.loads((work / "config.json").read_text())
-    for node_id, node in config["nodes"].items():
-        target["nodes"][node_id]["public_key"] = node["public_key"]
-    (work / "config.json").write_text(json.dumps(target, indent=2))
-
+    work = _clone_prepared(workspace, tmp_path, base_port=9741)
     _launch_pipeline(work, ["--ot-group", "1024"], timeout=600)
     assert not (work / "gc_input").exists(), "share vectors dumped without being asked"
 
