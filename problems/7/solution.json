@@ -1,0 +1,20 @@
+{
+  "description": "single region, crosses",
+  "threshold": 50,
+  "region_ids": [
+    7001
+  ],
+  "bit_length": 16,
+  "results": [
+    {
+      "region_index": 0,
+      "region_id": 7001,
+      "revealed": 7001,
+      "crossed": true,
+      "status": "QUARANTINE"
+    }
+  ],
+  "quarantined_region_ids": [
+    7001
+  ]
+}

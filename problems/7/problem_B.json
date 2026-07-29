@@ -1,0 +1,12 @@
+{
+  "description": "single region, crosses",
+  "threshold": 50,
+  "region_ids": [
+    7001
+  ],
+  "bit_length": 16,
+  "a_shares": null,
+  "b_shares": [
+    20
+  ]
+}

@@ -1,0 +1,390 @@
+{
+  "generated": "2026-07-28 14:45:23",
+  "mode": "full",
+  "environment": {
+    "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
+    "python": "3.11.11",
+    "cpu_count": 14
+  },
+  "problems": {
+    "rows": [
+      {
+        "problem": "1",
+        "regions": 4,
+        "bit_length": 16,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 5.893,
+            "revealed": [
+              1001,
+              0,
+              1003,
+              0
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 1.749,
+            "revealed": [
+              1001,
+              0,
+              1003,
+              0
+            ],
+            "matches_solution": true
+          }
+        }
+      },
+      {
+        "problem": "2",
+        "regions": 3,
+        "bit_length": 16,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 4.742,
+            "revealed": [
+              0,
+              0,
+              0
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 0.904,
+            "revealed": [
+              0,
+              0,
+              0
+            ],
+            "matches_solution": true
+          }
+        }
+      },
+      {
+        "problem": "3",
+        "regions": 3,
+        "bit_length": 16,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 4.969,
+            "revealed": [
+              3001,
+              3002,
+              3003
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 1.889,
+            "revealed": [
+              3001,
+              3002,
+              3003
+            ],
+            "matches_solution": true
+          }
+        }
+      },
+      {
+        "problem": "4",
+        "regions": 3,
+        "bit_length": 16,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 4.682,
+            "revealed": [
+              0,
+              4002,
+              0
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 1.217,
+            "revealed": [
+              0,
+              4002,
+              0
+            ],
+            "matches_solution": true
+          }
+        }
+      },
+      {
+        "problem": "5",
+        "regions": 4,
+        "bit_length": 16,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 6.353,
+            "revealed": [
+              5001,
+              0,
+              0,
+              5004
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 1.64,
+            "revealed": [
+              5001,
+              0,
+              0,
+              5004
+            ],
+            "matches_solution": true
+          }
+        }
+      },
+      {
+        "problem": "6",
+        "regions": 3,
+        "bit_length": 20,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 5.539,
+            "revealed": [
+              6001,
+              0,
+              0
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 1.235,
+            "revealed": [
+              6001,
+              0,
+              0
+            ],
+            "matches_solution": true
+          }
+        }
+      },
+      {
+        "problem": "7",
+        "regions": 1,
+        "bit_length": 16,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 1.393,
+            "revealed": [
+              7001
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 0.537,
+            "revealed": [
+              7001
+            ],
+            "matches_solution": true
+          }
+        }
+      },
+      {
+        "problem": "8",
+        "regions": 1,
+        "bit_length": 16,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 1.508,
+            "revealed": [
+              0
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 0.741,
+            "revealed": [
+              0
+            ],
+            "matches_solution": true
+          }
+        }
+      },
+      {
+        "problem": "9",
+        "regions": 2,
+        "bit_length": 8,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 1.919,
+            "revealed": [
+              0,
+              9002
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 0.678,
+            "revealed": [
+              0,
+              9002
+            ],
+            "matches_solution": true
+          }
+        }
+      },
+      {
+        "problem": "10",
+        "regions": 8,
+        "bit_length": 16,
+        "runs": {
+          "ot-2048": {
+            "seconds_wall": 11.79,
+            "revealed": [
+              10001,
+              10002,
+              10003,
+              0,
+              0,
+              10006,
+              10007,
+              10008
+            ],
+            "matches_solution": true
+          },
+          "ot-1024": {
+            "seconds_wall": 2.909,
+            "revealed": [
+              10001,
+              10002,
+              10003,
+              0,
+              0,
+              10006,
+              10007,
+              10008
+            ],
+            "matches_solution": true
+          }
+        }
+      }
+    ]
+  },
+  "scaling": {
+    "by_regions": [
+      {
+        "regions": 1,
+        "bit_length": 16,
+        "seconds": {
+          "ot-2048": 1.902,
+          "ot-1024": 0.448
+        }
+      },
+      {
+        "regions": 2,
+        "bit_length": 16,
+        "seconds": {
+          "ot-2048": 3.215,
+          "ot-1024": 1.053
+        }
+      },
+      {
+        "regions": 4,
+        "bit_length": 16,
+        "seconds": {
+          "ot-2048": 6.069,
+          "ot-1024": 1.202
+        }
+      },
+      {
+        "regions": 8,
+        "bit_length": 16,
+        "seconds": {
+          "ot-2048": 12.344,
+          "ot-1024": 2.68
+        }
+      }
+    ],
+    "by_bit_length": [
+      {
+        "regions": 4,
+        "bit_length": 8,
+        "seconds": {
+          "ot-2048": 3.208,
+          "ot-1024": 1.04
+        }
+      },
+      {
+        "regions": 4,
+        "bit_length": 16,
+        "seconds": {
+          "ot-2048": 5.971,
+          "ot-1024": 1.914
+        }
+      },
+      {
+        "regions": 4,
+        "bit_length": 24,
+        "seconds": {
+          "ot-2048": 10.377,
+          "ot-1024": 1.901
+        }
+      },
+      {
+        "regions": 4,
+        "bit_length": 32,
+        "seconds": {
+          "ot-2048": 12.449,
+          "ot-1024": 3.218
+        }
+      }
+    ]
+  },
+  "overhead": {
+    "seconds": {
+      "ot-2048": 1.439,
+      "ot-1024": 0.468
+    },
+    "note": "1 region, 8-bit shares, two processes"
+  },
+  "communication": {
+    "problem": "1",
+    "regions": 4,
+    "bit_length": 16,
+    "rows": {
+      "ot-2048": {
+        "garbler_to_evaluator_bytes": 85916,
+        "evaluator_to_garbler_bytes": 39946,
+        "bytes_total": 125862,
+        "bytes_per_region": 31466,
+        "messages": 20
+      },
+      "ot-1024": {
+        "garbler_to_evaluator_bytes": 84718,
+        "evaluator_to_garbler_bytes": 20215,
+        "bytes_total": 104933,
+        "bytes_per_region": 26233,
+        "messages": 20
+      }
+    }
+  },
+  "footprint": {
+    "yao_crypto_core": {
+      "files": 5,
+      "lines": 930,
+      "code_lines": 725
+    },
+    "threshold_driver": {
+      "files": 1,
+      "lines": 202,
+      "code_lines": 158
+    },
+    "shared_infrastructure": {
+      "files": 5,
+      "lines": 695,
+      "code_lines": 567
+    },
+    "transport_and_summation": {
+      "files": 11,
+      "lines": 1896,
+      "code_lines": 1459
+    },
+    "runtime_dependencies": [
+      "cryptography (standard primitives only)"
+    ]
+  }
+}

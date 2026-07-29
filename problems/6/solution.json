@@ -1,0 +1,36 @@
+{
+  "description": "large values, 20-bit width",
+  "threshold": 100000,
+  "region_ids": [
+    6001,
+    6002,
+    6003
+  ],
+  "bit_length": 20,
+  "results": [
+    {
+      "region_index": 0,
+      "region_id": 6001,
+      "revealed": 6001,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 1,
+      "region_id": 6002,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    },
+    {
+      "region_index": 2,
+      "region_id": 6003,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    }
+  ],
+  "quarantined_region_ids": [
+    6001
+  ]
+}

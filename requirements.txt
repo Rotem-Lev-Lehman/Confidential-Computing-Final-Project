@@ -1,0 +1,7 @@
+# Runtime dependencies. Kept in sync with pyproject.toml, which is the source
+# of truth -- prefer `uv sync --extra dev`.
+#
+# Only the standard primitives around the protocol (Ed25519, X25519, HKDF,
+# AES-GCM). The SMPC itself -- garbled circuits and oblivious transfer -- is
+# implemented from scratch and needs no dependency.
+cryptography>=42

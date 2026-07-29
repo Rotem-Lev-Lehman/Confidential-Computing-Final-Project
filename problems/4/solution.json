@@ -1,0 +1,36 @@
+{
+  "description": "boundary: equal is clear, +1 crosses",
+  "threshold": 50,
+  "region_ids": [
+    4001,
+    4002,
+    4003
+  ],
+  "bit_length": 16,
+  "results": [
+    {
+      "region_index": 0,
+      "region_id": 4001,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    },
+    {
+      "region_index": 1,
+      "region_id": 4002,
+      "revealed": 4002,
+      "crossed": true,
+      "status": "QUARANTINE"
+    },
+    {
+      "region_index": 2,
+      "region_id": 4003,
+      "revealed": 0,
+      "crossed": false,
+      "status": "clear"
+    }
+  ],
+  "quarantined_region_ids": [
+    4002
+  ]
+}
