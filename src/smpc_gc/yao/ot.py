@@ -137,7 +137,7 @@ def _kdf(
         + B.to_bytes(group.elem_bytes, "big")
         + group_elem.to_bytes(group.elem_bytes, "big")
     )
-    return hashlib.sha256(data).digest()[:n_bytes]
+    return hashlib.sha512(data).digest()[:n_bytes]
 
 
 def _xor_bytes(a: bytes, b: bytes) -> bytes:

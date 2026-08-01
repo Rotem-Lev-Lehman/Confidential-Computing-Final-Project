@@ -29,7 +29,7 @@ what prevents identity-misbinding attacks.
         mac_key     = HKDF(g_ab, info="sigma-mac-key"     || g_a || g_b)
         session_key = HKDF(g_ab, info="sigma-session-key" || g_a || g_b)
 
-Both keys come from HKDF-SHA256 (RFC 5869) over the raw X25519 output, with the
+Both keys come from HKDF-SHA512 (RFC 5869) over the raw X25519 output, with the
 transcript in the ``info`` string.  Extract-then-expand is the standard way to
 turn a DH secret -- which is uniform over a curve, not over bit strings -- into
 uniform key material, and binding *both* keys to the transcript means a key from
@@ -131,14 +131,17 @@ def build_transcript(g_initiator: bytes, g_responder: bytes) -> bytes:
 
 
 def _hkdf(shared_secret: bytes, info: bytes, length: int = 32) -> bytes:
-    """HKDF-SHA256 (RFC 5869) over the raw DH output.
+    """HKDF-SHA512 (RFC 5869) over the raw DH output.
 
     The X25519 result is uniform over the curve, not over bit strings, so it is
     not directly usable as a key.  Extract-then-expand is the standard fix; the
     salt is empty because the transcript already goes into ``info``.
+
+    SHA-512 keeps the hash margin wider than the 256-bit keys and the Ed25519
+    identities these keys protect, at no measurable cost for inputs this small.
     """
     return HKDF(
-        algorithm=hashes.SHA256(), length=length, salt=None, info=info
+        algorithm=hashes.SHA512(), length=length, salt=None, info=info
     ).derive(shared_secret)
 
 
@@ -153,7 +156,7 @@ def derive_session_key(shared_secret: bytes, transcript: bytes) -> bytes:
 
 
 def _identity_mac(mac_key: bytes, node_id: int) -> bytes:
-    return hmac.new(mac_key, b"id" + str(node_id).encode(), hashlib.sha256).digest()
+    return hmac.new(mac_key, b"id" + str(node_id).encode(), hashlib.sha512).digest()
 
 
 def _signed_payload(label: bytes, transcript: bytes) -> bytes:

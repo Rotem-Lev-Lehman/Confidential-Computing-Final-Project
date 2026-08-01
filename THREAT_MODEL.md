@@ -96,7 +96,7 @@ into `A` and `B` with `A + B ≡ true count (mod p)`.
 The two parties evaluate, per region, `(A + B mod p) > 50 ? region_id : Clear`.
 
 * **Guarantee:** computational, under standard assumptions — a circular
-  correlation-robust hash (SHA-256, modelled as a random oracle) for garbling,
+  correlation-robust hash (SHA-512, modelled as a random oracle) for garbling,
   and Computational Diffie–Hellman in a 2048-bit MODP group for the Oblivious
   Transfer.
 * **What the Evaluator sees:** garbled tables, random-looking wire labels, and
@@ -129,7 +129,7 @@ crosses the same protected channel.
 | Property | Mechanism | Where |
 |---|---|---|
 | Peer authentication | SIGMA sign-and-MAC, per-node Ed25519 identity keys | `src/sigma_handshake.py` |
-| Key agreement | Ephemeral X25519, HKDF-SHA256, transcript-bound | `src/sigma_handshake.py` |
+| Key agreement | Ephemeral X25519, HKDF-SHA512, transcript-bound | `src/sigma_handshake.py` |
 | Forward secrecy | DH keys discarded after the handshake | `src/sigma_handshake.py` |
 | Confidentiality + integrity | AES-256-GCM per directed link | `src/secure_channel.py` |
 | Replay / reorder resistance | Counter nonces + `sender→receiver#seq` as AAD, never transmitted | `src/secure_channel.py` |
@@ -236,10 +236,10 @@ written `0600`, so the demo habits match the production ones.
 | Field modulus `p` | 1048573 (2²⁰−3, prime) | Must exceed `num_nodes × max_local_count` so the global sum cannot wrap. Validated at startup, including primality. |
 | Share width | 20 bits (`p.bit_length()`) | Base OT costs one modular exponentiation per evaluator input bit, so this is the dominant cost driver. |
 | Wire labels | 128 bits | Standard for garbled circuits. |
-| Gate hash | SHA-256, truncated to 128 bits | Modelled as a random oracle; free-XOR needs circular correlation robustness. |
+| Gate hash | SHA-512, truncated to 128 bits | Modelled as a random oracle; free-XOR needs circular correlation robustness. |
 | OT group | RFC 3526 MODP-2048 (default) | Current recommended strength. `--ot-group 1024` is ~5× faster for demos and explicitly weaker. |
 | Identity keys | Ed25519 | Per-node; no shared secret. |
-| AKE | X25519 + HKDF-SHA256 | Ephemeral, for forward secrecy. |
+| AKE | X25519 + HKDF-SHA512 | Ephemeral, for forward secrecy. |
 | Record encryption | AES-256-GCM | 32-byte session key from the handshake. |
 
 **Known performance limitation.** The OT is textbook *base* OT — one public-key

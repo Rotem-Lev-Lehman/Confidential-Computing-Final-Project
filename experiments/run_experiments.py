@@ -166,23 +166,46 @@ def exp_problems(quick: bool) -> dict:
 
 
 def exp_scaling(quick: bool) -> dict:
+    import statistics
     import tempfile
 
-    def _sweep(cases: list[tuple[int, int]]) -> list[dict]:
+    def _sweep(cases: list[tuple[int, int]], repeats: int = 5) -> list[dict]:
+        """Time each case `repeats` times and report mean and stdev.
+
+        A single run is noisy at the ~0.1 s level -- process spawn and socket
+        rendezvous dominate the fastest configurations -- which is enough to
+        make a larger input look faster than a smaller one. Repeating and
+        averaging keeps the reported trend a property of the protocol rather
+        than of one scheduling accident.
+        """
         out = []
         for m, bits in cases:
             problem = make_mock_problem(num_regions=m, bit_length=bits, seed=1)
             with tempfile.TemporaryDirectory() as tmp:
                 _write_party_files(problem, Path(tmp))
-                entry = {"regions": m, "bit_length": bits, "seconds": {}}
+                entry = {
+                    "regions": m,
+                    "bit_length": bits,
+                    "seconds": {},
+                    "stdev": {},
+                    "repeats": repeats,
+                }
                 for label, flags in _configs(quick):
-                    entry["seconds"][label] = run_distributed(flags, Path(tmp))[
-                        "seconds_wall"
+                    samples = [
+                        run_distributed(flags, Path(tmp))["seconds_wall"]
+                        for _ in range(repeats)
                     ]
+                    entry["seconds"][label] = statistics.mean(samples)
+                    entry["stdev"][label] = (
+                        statistics.stdev(samples) if len(samples) > 1 else 0.0
+                    )
             out.append(entry)
             print("  regions={} bits={}: {}".format(
                 m, bits,
-                ", ".join(f"{k} {v:.2f}s" for k, v in entry["seconds"].items()),
+                ", ".join(
+                    f"{k} {v:.2f}s +/-{entry['stdev'][k]:.2f}"
+                    for k, v in entry["seconds"].items()
+                ),
             ))
         return out
 
