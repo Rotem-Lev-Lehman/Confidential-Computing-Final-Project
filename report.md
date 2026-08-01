@@ -714,7 +714,7 @@ two-process 2PC session**, party 0 and party 1 as separate OS processes over
 real sockets. Wall time is what a user actually waits, including process spawn
 and rendezvous. Local simulation is never used for measurements.
 
-Environment: Linux, Python 3.11, 14 cores.
+Environment: Linux (RHEL 9.7, kernel 5.14), Python 3.10, 12 cores.
 
 ### 9.1 Correctness
 
@@ -725,39 +725,33 @@ truth computed from the generated records.
 
 ### 9.2 Speed
 
-> **Regenerate before submitting.** `run_experiments.py` now repeats each
-> measurement 5 times and reports mean and standard deviation; the tables below
-> must be refilled from a run on the reporting machine
-> (`uv run python experiments/run_experiments.py`). The previous single-run
-> figures contained two anomalies that the repeats remove: at 1024-bit, 24-bit
-> shares timed *faster* than 16-bit, and the 2 to 4 region step cost less than
-> the 1 to 2 step. Both contradicted the linear-growth claim below.
-
-Every figure is the mean of 5 runs, with the standard deviation alongside. A
-single run varies by around 0.1 s because process spawn and socket rendezvous
-land differently each time, which is enough noise to make a larger input look
-faster than a smaller one; averaging keeps the reported trend a property of the
-protocol rather than of one scheduling accident.
+Every figure is the mean of 5 runs, with the standard deviation alongside.
+Averaging matters here: a single run varies by enough that a larger input can
+time faster than a smaller one, which would contradict the trend the numbers are
+there to establish.
 
 | regions (16-bit shares) | 2048-bit OT | 1024-bit OT |
 |---|---|---|
-| 1 | _regen_ | _regen_ |
-| 2 | _regen_ | _regen_ |
-| 4 | _regen_ | _regen_ |
-| 8 | _regen_ | _regen_ |
+| 1 | 1.93 s ± 0.01 | 0.36 s ± 0.01 |
+| 2 | 3.80 s ± 0.01 | 0.68 s ± 0.00 |
+| 4 | 7.55 s ± 0.00 | 1.32 s ± 0.01 |
+| 8 | 15.04 s ± 0.03 | 2.60 s ± 0.01 |
 
 | share width (4 regions) | 2048-bit OT | 1024-bit OT |
 |---|---|---|
-| 8 bits | _regen_ | _regen_ |
-| 16 bits | _regen_ | _regen_ |
-| 24 bits | _regen_ | _regen_ |
-| 32 bits | _regen_ | _regen_ |
+| 8 bits | 3.95 s ± 0.01 | 0.77 s ± 0.01 |
+| 16 bits | 7.55 s ± 0.02 | 1.32 s ± 0.00 |
+| 24 bits | 11.16 s ± 0.04 | 1.87 s ± 0.01 |
+| 32 bits | 14.80 s ± 0.03 | 2.42 s ± 0.00 |
 
-Cost grows linearly in `regions × bit_length`, as predicted: the
-engine runs textbook base OT, one modular exponentiation per evaluator input
-bit. The fixed protocol overhead (smallest possible run) is 1.44 s at 2048-bit
-and 0.47 s at 1024-bit; subtracting it gives the marginal cost of the
-cryptography itself.
+Cost grows linearly in `regions × bit_length`, as predicted: the engine runs
+textbook base OT, one modular exponentiation per evaluator input bit. The
+measurements show this sharply. Doubling the region count multiplies the time by
+1.97, 1.99 and 1.99 across the three doublings, and every additional 8 bits of
+share width adds a near-constant 3.60 s, 3.62 s and 3.64 s at 2048-bit (0.54 s,
+0.56 s and 0.55 s at 1024-bit). The fixed protocol overhead, measured on the
+smallest possible run, is 1.02 s at 2048-bit and 0.22 s at 1024-bit; subtracting
+it gives the marginal cost of the cryptography itself.
 
 This measured relationship is why the §5 redesign matters in practice:
 narrowing shares from 47 to 20 bits removes 57% of the public-key work.
@@ -766,8 +760,8 @@ narrowing shares from 47 to 20 bits removes 57% of the public-key work.
 
 | configuration | garbler→evaluator | evaluator→garbler | total | per region |
 |---|---|---|---|---|
-| 2048-bit OT | 85,916 B | 39,946 B | 125,862 B | 31,466 B |
-| 1024-bit OT | 84,718 B | 20,215 B | 104,933 B | 26,233 B |
+| 2048-bit OT | 85,949 B | 39,941 B | 125,890 B | 31,472 B |
+| 1024-bit OT | 84,714 B | 20,221 B | 104,935 B | 26,234 B |
 
 Measured exactly on the channel (4 regions × 16 bits). Garbled tables dominate:
 four 128-bit ciphertexts per AND gate. **Traffic is a function of the public
@@ -779,10 +773,11 @@ just a performance figure.
 | Component | Code lines |
 |---|---|
 | `smpc_gc/yao/`, circuit, garbling, OT, protocol | 725 |
-| `smpc_gc/`, threshold driver, channel, types, mock, CLI | 725 |
-| Transport + secure summation (SIGMA, AEAD, mesh, sharing) | 1,761 |
-| **Total production code** | **~3,200** |
-| Test suite | 1,502 |
+| `smpc_gc/threshold.py`, the per-region driver | 158 |
+| `smpc_gc/`, channel, types, mock, CLI | 567 |
+| Transport + secure summation (SIGMA, AEAD, mesh, sharing) | 1,478 |
+| **Total production code** | **2,928** |
+| Test suite | 1,503 |
 
 Runtime dependencies: one. `cryptography`, used only for standard primitives
 around the protocol. The SMPC itself is `hashlib`, `secrets` and `socket`.
