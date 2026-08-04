@@ -57,12 +57,11 @@ four-process pipeline and a suite of adversarial transport tests.
 5. [The central technical problem: modular reconstruction](#5-the-central-technical-problem-modular-reconstruction)
 6. [Security analysis](#6-security-analysis)
 7. [Security considerations: the full list](#7-security-considerations-the-full-list)
-8. [Engineering decisions](#8-engineering-decisions)
-9. [Experimental evaluation](#9-experimental-evaluation)
-10. [Verification and testing](#10-verification-and-testing)
-11. [Limitations and future work](#11-limitations-and-future-work)
-12. [Conclusion](#12-conclusion)
-13. [Appendices](#appendix-a--how-to-run)
+8. [Experimental evaluation](#8-experimental-evaluation)
+9. [Verification and testing](#9-verification-and-testing)
+10. [Limitations and future work](#10-limitations-and-future-work)
+11. [Conclusion](#11-conclusion)
+12. [Appendices](#appendix-a--how-to-run)
 
 ---
 
@@ -646,67 +645,7 @@ a single assumption.
 
 The full table, all 43 items with the reasoning for each, is in Appendix D.
 
-## 8. Engineering decisions
-
-### 8.1 We evaluated MPyC as a second engine, and removed it
-
-To compare our implementation against an established framework, we built a
-pluggable backend interface and added [MPyC](https://github.com/lschoe/mpyc) as a
-second engine. We evaluated it, found it unsuitable, and removed it. Two
-reasons, in order of importance:
-
-1. **MPyC does not implement Yao's Garbled Circuits.** It is *honest-majority
-   Shamir secret sharing* over arithmetic circuits, a different primitive
-   entirely. Benchmarking it against our engine compares two unrelated
-   techniques, which is not the comparison this project is about.
-
-2. **In the two-party setting it provides no input privacy at all.**
-   Honest-majority Shamir requires `t < m/2`. With `m = 2` parties MPyC runs at
-   threshold `t = 0`, and a degree-0 sharing polynomial is the constant
-   `f(X) = secret`, so the "share" is the secret. We confirmed this
-   experimentally before dropping it: **party 1 read party 0's private input
-   verbatim from its own share.** Yao's protocol is what the proposal specifies
-   because it is secure for two parties.
-
-MPyC would be a sound choice for a *different* architecture: one 4-party session
-across all four hospitals, skipping the reduction to two parties entirely, where
-`t = 1` and no single hospital learns anything. That is a legitimate alternative
-design, but it is not a drop-in engine for this proposal's hybrid pipeline.
-
-A further practical problem: MPyC brings its own networking with no hook to
-substitute ours, so it opened a second, unprotected connection outside our
-authenticated channel, meaning its traffic would not have had any of the
-protections in §6.4.
-
-With one engine remaining, the backend abstraction and its registry were pure
-indirection, so they were removed too.
-
-### 8.2 The transport seam we kept
-
-One abstraction earned its place: the `Channel` contract (`send` / `recv` /
-`close`). The 2PC engine never touches sockets directly, so the same crypto code
-runs over a bare socket in tests and over the SIGMA-authenticated, AES-GCM
-encrypted mesh in production, with no change to the cryptographic layer. This
-is what lets Phase 3 inherit every transport guarantee in §6.4.
-
-### 8.3 Division of work
-
-The project was split along the interface boundary so both halves could be
-developed, mocked and tested independently:
-
-* **Workstream A, Networking & Secure Summation:** the P2P mesh, the SIGMA
-  handshake and encrypted transport, vectorisation, additive sharing, the secure
-  sum, and share migration.
-* **Workstream B, Garbled Circuits & Logic Evaluation:** the boolean circuit,
-  the garbling scheme, Oblivious Transfer, and the two-party protocol.
-
-They meet at exactly two seams, both covered by dedicated tests: the
-`ThresholdProblem` hand-off (the `A`/`B` interface) and the `Channel` transport
-contract.
-
----
-
-## 9. Experimental evaluation
+## 8. Experimental evaluation
 
 Full tables in [`experiments/measurements.md`](experiments/measurements.md); raw
 data in `experiments/results.json`. **Every timed measurement is a genuine
@@ -716,14 +655,14 @@ and rendezvous. Local simulation is never used for measurements.
 
 Environment: Linux (RHEL 9.7, kernel 5.14), Python 3.10, 12 cores.
 
-### 9.1 Correctness
+### 8.1 Correctness
 
 All ten problem instances in `problems/`, in both OT-group configurations, reveal
 exactly the expected output, checked against a stored `solution.json` per
 problem. The full four-process pipeline was additionally verified against ground
 truth computed from the generated records.
 
-### 9.2 Speed
+### 8.2 Speed
 
 Every figure is the mean of 5 runs, with the standard deviation alongside.
 Averaging matters here: a single run varies by enough that a larger input can
@@ -756,7 +695,7 @@ it gives the marginal cost of the cryptography itself.
 This measured relationship is why the §5 redesign matters in practice:
 narrowing shares from 47 to 20 bits removes 57% of the public-key work.
 
-### 9.3 Communication
+### 8.3 Communication
 
 | configuration | garbler→evaluator | evaluator→garbler | total | per region |
 |---|---|---|---|---|
@@ -768,7 +707,7 @@ four 128-bit ciphertexts per AND gate. **Traffic is a function of the public
 parameters only**, so it leaks nothing about the inputs, a security property, not
 just a performance figure.
 
-### 9.4 Implementation footprint
+### 8.4 Implementation footprint
 
 | Component | Code lines |
 |---|---|
@@ -784,7 +723,7 @@ around the protocol. The SMPC itself is `hashlib`, `secrets` and `socket`.
 
 ---
 
-## 10. Verification and testing
+## 9. Verification and testing
 
 156 automated tests. The suite is structured around the properties that
 matter, not just line coverage.
@@ -819,7 +758,7 @@ Two results worth highlighting:
 
 ---
 
-## 11. Limitations and future work
+## 10. Limitations and future work
 
 Stated plainly rather than omitted.
 
@@ -835,7 +774,7 @@ Stated plainly rather than omitted.
 
 ---
 
-## 12. Conclusion
+## 11. Conclusion
 
 We built a complete, working, privacy-preserving distributed system that answers
 a real public-health question, *which regions must be locked down?*, while
