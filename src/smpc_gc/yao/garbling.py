@@ -45,7 +45,7 @@ def _H(gate_id: int, label_a: int, label_b: int) -> int:
         + label_a.to_bytes(LABEL_BYTES, "big")
         + label_b.to_bytes(LABEL_BYTES, "big")
     )
-    return int.from_bytes(hashlib.sha256(data).digest()[:LABEL_BYTES], "big")
+    return int.from_bytes(hashlib.sha512(data).digest()[:LABEL_BYTES], "big")
 
 
 @dataclass

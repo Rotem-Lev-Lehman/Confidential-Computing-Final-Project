@@ -1,10 +1,10 @@
 {
-  "generated": "2026-07-28 14:45:23",
+  "generated": "2026-08-02 02:05:46",
   "mode": "full",
   "environment": {
-    "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
-    "python": "3.11.11",
-    "cpu_count": 14
+    "platform": "Linux-5.14.0-611.47.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "python": "3.10.19",
+    "cpu_count": 12
   },
   "problems": {
     "rows": [
@@ -14,7 +14,7 @@
         "bit_length": 16,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 5.893,
+            "seconds_wall": 7.673,
             "revealed": [
               1001,
               0,
@@ -24,7 +24,7 @@
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 1.749,
+            "seconds_wall": 1.317,
             "revealed": [
               1001,
               0,
@@ -41,7 +41,7 @@
         "bit_length": 16,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 4.742,
+            "seconds_wall": 5.664,
             "revealed": [
               0,
               0,
@@ -50,7 +50,7 @@
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 0.904,
+            "seconds_wall": 1.103,
             "revealed": [
               0,
               0,
@@ -66,7 +66,7 @@
         "bit_length": 16,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 4.969,
+            "seconds_wall": 5.702,
             "revealed": [
               3001,
               3002,
@@ -75,7 +75,7 @@
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 1.889,
+            "seconds_wall": 1.009,
             "revealed": [
               3001,
               3002,
@@ -91,7 +91,7 @@
         "bit_length": 16,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 4.682,
+            "seconds_wall": 5.671,
             "revealed": [
               0,
               4002,
@@ -100,7 +100,7 @@
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 1.217,
+            "seconds_wall": 1.001,
             "revealed": [
               0,
               4002,
@@ -116,7 +116,7 @@
         "bit_length": 16,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 6.353,
+            "seconds_wall": 7.564,
             "revealed": [
               5001,
               0,
@@ -126,7 +126,7 @@
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 1.64,
+            "seconds_wall": 1.312,
             "revealed": [
               5001,
               0,
@@ -143,7 +143,7 @@
         "bit_length": 20,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 5.539,
+            "seconds_wall": 7.032,
             "revealed": [
               6001,
               0,
@@ -152,7 +152,7 @@
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 1.235,
+            "seconds_wall": 1.22,
             "revealed": [
               6001,
               0,
@@ -168,14 +168,14 @@
         "bit_length": 16,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 1.393,
+            "seconds_wall": 1.925,
             "revealed": [
               7001
             ],
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 0.537,
+            "seconds_wall": 0.364,
             "revealed": [
               7001
             ],
@@ -189,14 +189,14 @@
         "bit_length": 16,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 1.508,
+            "seconds_wall": 1.928,
             "revealed": [
               0
             ],
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 0.741,
+            "seconds_wall": 0.358,
             "revealed": [
               0
             ],
@@ -210,7 +210,7 @@
         "bit_length": 8,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 1.919,
+            "seconds_wall": 2.027,
             "revealed": [
               0,
               9002
@@ -218,7 +218,7 @@
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 0.678,
+            "seconds_wall": 0.401,
             "revealed": [
               0,
               9002
@@ -233,7 +233,7 @@
         "bit_length": 16,
         "runs": {
           "ot-2048": {
-            "seconds_wall": 11.79,
+            "seconds_wall": 15.087,
             "revealed": [
               10001,
               10002,
@@ -247,7 +247,7 @@
             "matches_solution": true
           },
           "ot-1024": {
-            "seconds_wall": 2.909,
+            "seconds_wall": 2.603,
             "revealed": [
               10001,
               10002,
@@ -270,33 +270,53 @@
         "regions": 1,
         "bit_length": 16,
         "seconds": {
-          "ot-2048": 1.902,
-          "ot-1024": 0.448
-        }
+          "ot-2048": 1.929,
+          "ot-1024": 0.36119999999999997
+        },
+        "stdev": {
+          "ot-2048": 0.007549834435270771,
+          "ot-1024": 0.009782637681116488
+        },
+        "repeats": 5
       },
       {
         "regions": 2,
         "bit_length": 16,
         "seconds": {
-          "ot-2048": 3.215,
-          "ot-1024": 1.053
-        }
+          "ot-2048": 3.8014,
+          "ot-1024": 0.6766000000000001
+        },
+        "stdev": {
+          "ot-2048": 0.013722244714331573,
+          "ot-1024": 0.0005477225575051665
+        },
+        "repeats": 5
       },
       {
         "regions": 4,
         "bit_length": 16,
         "seconds": {
-          "ot-2048": 6.069,
-          "ot-1024": 1.202
-        }
+          "ot-2048": 7.548,
+          "ot-1024": 1.3178
+        },
+        "stdev": {
+          "ot-2048": 0.004743416490252515,
+          "ot-1024": 0.006300793600809397
+        },
+        "repeats": 5
       },
       {
         "regions": 8,
         "bit_length": 16,
         "seconds": {
-          "ot-2048": 12.344,
-          "ot-1024": 2.68
-        }
+          "ot-2048": 15.0388,
+          "ot-1024": 2.5998
+        },
+        "stdev": {
+          "ot-2048": 0.0254499508840388,
+          "ot-1024": 0.005263078946776293
+        },
+        "repeats": 5
       }
     ],
     "by_bit_length": [
@@ -304,40 +324,60 @@
         "regions": 4,
         "bit_length": 8,
         "seconds": {
-          "ot-2048": 3.208,
-          "ot-1024": 1.04
-        }
+          "ot-2048": 3.9494,
+          "ot-1024": 0.7718
+        },
+        "stdev": {
+          "ot-2048": 0.010114346246792224,
+          "ot-1024": 0.010401922899156684
+        },
+        "repeats": 5
       },
       {
         "regions": 4,
         "bit_length": 16,
         "seconds": {
-          "ot-2048": 5.971,
-          "ot-1024": 1.914
-        }
+          "ot-2048": 7.5462,
+          "ot-1024": 1.3162
+        },
+        "stdev": {
+          "ot-2048": 0.016407315441595086,
+          "ot-1024": 0.0034205262752973653
+        },
+        "repeats": 5
       },
       {
         "regions": 4,
         "bit_length": 24,
         "seconds": {
-          "ot-2048": 10.377,
-          "ot-1024": 1.901
-        }
+          "ot-2048": 11.1612,
+          "ot-1024": 1.873
+        },
+        "stdev": {
+          "ot-2048": 0.04105727706509518,
+          "ot-1024": 0.006244997998398324
+        },
+        "repeats": 5
       },
       {
         "regions": 4,
         "bit_length": 32,
         "seconds": {
-          "ot-2048": 12.449,
-          "ot-1024": 3.218
-        }
+          "ot-2048": 14.8012,
+          "ot-1024": 2.422
+        },
+        "stdev": {
+          "ot-2048": 0.03272155253040432,
+          "ot-1024": 0.00430116263352133
+        },
+        "repeats": 5
       }
     ]
   },
   "overhead": {
     "seconds": {
-      "ot-2048": 1.439,
-      "ot-1024": 0.468
+      "ot-2048": 1.024,
+      "ot-1024": 0.218
     },
     "note": "1 region, 8-bit shares, two processes"
   },
@@ -347,17 +387,17 @@
     "bit_length": 16,
     "rows": {
       "ot-2048": {
-        "garbler_to_evaluator_bytes": 85916,
-        "evaluator_to_garbler_bytes": 39946,
-        "bytes_total": 125862,
-        "bytes_per_region": 31466,
+        "garbler_to_evaluator_bytes": 85949,
+        "evaluator_to_garbler_bytes": 39941,
+        "bytes_total": 125890,
+        "bytes_per_region": 31472,
         "messages": 20
       },
       "ot-1024": {
-        "garbler_to_evaluator_bytes": 84718,
-        "evaluator_to_garbler_bytes": 20215,
-        "bytes_total": 104933,
-        "bytes_per_region": 26233,
+        "garbler_to_evaluator_bytes": 84714,
+        "evaluator_to_garbler_bytes": 20221,
+        "bytes_total": 104935,
+        "bytes_per_region": 26234,
         "messages": 20
       }
     }
@@ -375,13 +415,13 @@
     },
     "shared_infrastructure": {
       "files": 5,
-      "lines": 695,
+      "lines": 694,
       "code_lines": 567
     },
     "transport_and_summation": {
       "files": 11,
-      "lines": 1896,
-      "code_lines": 1459
+      "lines": 1924,
+      "code_lines": 1478
     },
     "runtime_dependencies": [
       "cryptography (standard primitives only)"
